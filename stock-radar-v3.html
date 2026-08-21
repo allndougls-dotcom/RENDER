@@ -1850,7 +1850,7 @@ body::before {
 
 <!-- REGISTRO AUTOMÁTICO DE SEÑALES -->
 <div class="section" id="sec-registro">
-  <div class="section-title">Registro de Señales <small style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);font-weight:400;letter-spacing:1px">Seguimiento automático de resultado (WIN/LOSS) y Win Rate por warning</small></div>
+  <div class="section-title">Registro de Señales <small style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);font-weight:400;letter-spacing:1px">Seguimiento automático de resultado (WIN/LOSS) y Win Rate por warning</small> <span id="registroSyncStatus" style="display:none;font-family:'DM Mono',monospace;font-size:10px;margin-left:12px"></span></div>
 
   <div class="panel" style="margin-bottom:16px;font-size:11px;color:var(--text2);line-height:1.7">
     Cada vez que cargas un CSV nuevo: <strong style="color:var(--accent)">(1)</strong> se registran las empresas que cumplen mínimos (Score≥6.5, DD≥8%), <strong style="color:var(--accent)">con o sin warning</strong> · <strong style="color:var(--accent)">(2)</strong> las señales pendientes se evalúan contra el precio actual — <strong style="color:var(--green)">WIN</strong> si tocó +6.5%, <strong style="color:var(--red)">LOSS</strong> si tocó -5%, <strong style="color:var(--text3)">EXPIRED</strong> si pasaron 15 días sin resolver.
@@ -1871,6 +1871,8 @@ body::before {
       <option value="LOSS">❌ Perdidas</option>
       <option value="EXPIRED">⌛ Expiradas</option>
     </select>
+    <button class="btn btn-primary" onclick="document.getElementById('registroImportInput').click()">📥 Importar CSV/JSON</button>
+    <input type="file" id="registroImportInput" accept=".csv,.json" style="display:none" onchange="importRegistroFile(this)">
     <button class="btn btn-primary" onclick="exportRegistroCSV()">⬇ Exportar CSV</button>
     <button class="btn btn-primary" onclick="exportRegistroJSON()">⬇ Exportar JSON</button>
     <button class="btn btn-secondary" onclick="if(confirm('¿Borrar todo el registro? Esta acción no se puede deshacer.')) clearRegistro()">🗑 Borrar registro</button>
@@ -2020,6 +2022,10 @@ window.onload = () => {
   // Intenta cargar automáticamente el último CSV (requiere servidor_local.py).
   // Si no hay servidor corriendo, no hace nada y queda el flujo manual de siempre.
   autoLoadLatestCSV();
+  // Trae el histórico del Registro desde Turso (si está configurado) ANTES
+  // de que se cargue ningún CSV nuevo, para que registrarSeñalesAutomaticas()
+  // no re-cree como "nueva" una señal que ya existía en el servidor.
+  sincronizarRegistroDesdeServidor();
 };
 
 function computeWarnings() {
@@ -4506,12 +4512,26 @@ function exportExcel() {
 // REGISTRO Y SEGUIMIENTO DE SEÑALES (con evaluación WIN/LOSS)
 // Persiste en localStorage. Cada señal se sobreescribe in-place
 // (no se duplica) hasta que resuelve en WIN/LOSS/EXPIRED.
+//
+// Persistencia en dos capas:
+//   1. localStorage — caché local instantánea, la UI siempre lee/escribe
+//      aquí de forma síncrona (sin esperar red).
+//   2. Turso (vía /api/registro en servidor_local.py) — respaldo real
+//      que sobrevive a redeploys de Render, cambios de versión del HTML
+//      o limpiezas de localStorage. saveRegistro() sincroniza hacia el
+//      servidor EN SEGUNDO PLANO (no bloquea la UI); al arrancar la app,
+//      sincronizarRegistroDesdeServidor() trae lo que haya en Turso y lo
+//      fusiona con lo local, para que abrir la app en otro dispositivo/
+//      navegador recupere el histórico completo.
 // ══════════════════════════════════════════════════════════════
 
 const REGISTRO_KEY   = 'sidi_registro_señales_v2';
 const REGISTRO_TARGET_PCT = 0.065;  // +6.5% (mismo que backtest.py base)
 const REGISTRO_STOP_PCT   = 0.05;   // -5%
 const REGISTRO_TIME_STOP_DAYS = 15; // si no resuelve en 15 días -> EXPIRED
+
+let __registroSyncPendiente = false;
+let __registroServidorDisponible = null; // null = aún no comprobado
 
 function loadRegistro() {
   try {
@@ -4529,6 +4549,84 @@ function saveRegistro(registro) {
   } catch (e) {
     console.warn('No se pudo guardar el registro en localStorage (¿cuota llena?):', e);
     alert('Aviso: el registro no se pudo guardar en el navegador (posible límite de almacenamiento). Exporta a CSV/JSON periódicamente como respaldo.');
+  }
+  sincronizarRegistroHaciaServidor(registro);
+}
+
+// ── Sincronización con el servidor (Turso), en segundo plano ──────
+async function sincronizarRegistroHaciaServidor(registro) {
+  if (__registroServidorDisponible === false) return; // ya sabemos que no hay servidor, no reintentar en cada save
+  if (!registro || !registro.length) return;
+  if (__registroSyncPendiente) return; // evita solapar sincronizaciones si se guarda muy seguido
+  __registroSyncPendiente = true;
+
+  try {
+    const res = await fetch('/api/registro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ señales: registro }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.status === 503) {
+      __registroServidorDisponible = false; // Turso no configurado en el servidor
+    } else if (res.ok) {
+      __registroServidorDisponible = true;
+    }
+  } catch (e) {
+    // Sin conexión al servidor (offline, Render dormido, etc.) — no es
+    // crítico, localStorage ya tiene los datos; se reintentará en el
+    // próximo save() o en la próxima carga de la app.
+    console.warn('No se pudo sincronizar el registro con el servidor:', e.message);
+  } finally {
+    __registroSyncPendiente = false;
+  }
+}
+
+// ── Traer el registro del servidor y fusionarlo con el local ──────
+// Se llama una vez al entrar en la pestaña Registro (o al arrancar la
+// app). Fusiona por ticker+fechaDeteccion: el servidor es la fuente de
+// verdad de más largo plazo, pero si localStorage tiene una señal más
+// reciente (por ejemplo editada mientras no había red), se conserva esa.
+async function sincronizarRegistroDesdeServidor() {
+  try {
+    const res = await fetch('/api/registro', { signal: AbortSignal.timeout(8000) });
+    if (res.status === 503) {
+      __registroServidorDisponible = false;
+      return { ok: false, motivo: 'turso_no_configurado' };
+    }
+    if (!res.ok) {
+      return { ok: false, motivo: `HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    __registroServidorDisponible = true;
+
+    const local = loadRegistro();
+    const localPorClave = new Map(local.map(r => [`${r.ticker}|${r.fechaDeteccion}`, r]));
+    const servidor = data.registro || [];
+
+    let traidas = 0;
+    servidor.forEach(s => {
+      const clave = `${s.ticker}|${s.fechaDeteccion}`;
+      const existenteLocal = localPorClave.get(clave);
+      // Si no existe localmente, o la del servidor es más reciente
+      // (por fechaRegistroTimestamp), se usa la del servidor.
+      if (!existenteLocal) {
+        localPorClave.set(clave, s);
+        traidas++;
+      } else if ((s.fechaRegistroTimestamp || '') > (existenteLocal.fechaRegistroTimestamp || '')) {
+        localPorClave.set(clave, s);
+        traidas++;
+      }
+    });
+
+    const fusionado = [...localPorClave.values()];
+    if (traidas > 0) {
+      localStorage.setItem(REGISTRO_KEY, JSON.stringify(fusionado)); // directo, sin re-disparar sync
+    }
+    return { ok: true, traidas, total: fusionado.length };
+  } catch (e) {
+    console.warn('No se pudo sincronizar el registro desde el servidor:', e.message);
+    return { ok: false, motivo: e.message };
   }
 }
 
@@ -4695,6 +4793,37 @@ function analizarWRPorWarning(registro) {
   return { global, agregado, detallePorTipo, totalResueltas: resueltas.length, totalPending: registro.filter(r=>r.estado==='PENDING').length };
 }
 
+// ── Abrir la pestaña Registro: sincroniza con el servidor antes de pintar ──
+async function abrirRegistro() {
+  const statusEl = document.getElementById('registroSyncStatus');
+  if (statusEl) {
+    statusEl.style.display = 'inline';
+    statusEl.textContent = '🔄 Sincronizando con el servidor...';
+    statusEl.style.color = 'var(--text3)';
+  }
+
+  const resultado = await sincronizarRegistroDesdeServidor();
+
+  if (statusEl) {
+    if (resultado.ok) {
+      statusEl.textContent = resultado.traidas > 0
+        ? `✅ Sincronizado — ${resultado.traidas} señal(es) recuperada(s) del servidor`
+        : '✅ Sincronizado con el servidor';
+      statusEl.style.color = 'var(--green)';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
+    } else if (resultado.motivo === 'turso_no_configurado') {
+      statusEl.textContent = '⚠ Sin backup en servidor (Turso no configurado) — usando solo este navegador';
+      statusEl.style.color = 'var(--amber)';
+    } else {
+      statusEl.textContent = '⚠ No se pudo contactar con el servidor — usando datos locales';
+      statusEl.style.color = 'var(--amber)';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+    }
+  }
+
+  renderRegistro();
+}
+
 function renderRegistro() {
   const registro = loadRegistro();
   updateRegistroBadge(registro.filter(r => r.estado === 'PENDING').length);
@@ -4803,6 +4932,132 @@ function renderAnalisisWarnings(analisis) {
   `;
 }
 
+// ══════════════════════════════════════════════════════════════
+// IMPORTAR CSV/JSON AL REGISTRO — reconoce 3 formatos:
+//  1. JSON exportado por exportRegistroJSON(): {registro:[...], analisisWR:{...}}
+//  2. JSON como array plano de registros: [{...}, {...}]
+//  3. CSV exportado por exportRegistroCSV() (mismas cabeceras)
+// Fusiona con el registro existente deduplicando por ticker+fechaDeteccion
+// (mismo criterio que usa registrarSeñalesAutomaticas), para no crear
+// entradas repetidas si vuelves a importar el mismo backup dos veces.
+// ══════════════════════════════════════════════════════════════
+function importRegistroFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const esCSV = /\.csv$/i.test(file.name);
+
+  if (esCSV) {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => procesarImportacionRegistro(results.data, file.name),
+      error: (err) => alert('Error al leer el CSV: ' + err.message),
+    });
+  } else {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        let filas;
+        if (Array.isArray(parsed)) {
+          filas = parsed;
+        } else if (Array.isArray(parsed.registro)) {
+          filas = parsed.registro;
+        } else if (parsed.sidi_excel_payload && Array.isArray(parsed.sidi_excel_payload.positions)) {
+          // Compatibilidad con sidi_excel_payload (import desde Macro Filter)
+          filas = parsed.sidi_excel_payload.positions.map(p => ({
+            fechaDeteccion: (parsed.sidi_excel_payload.analysis_date || new Date().toISOString().slice(0,10)),
+            ticker: p.ticker, name: p.company, sector: p.sector,
+            score: p.news_score ?? null, drawdown60: p.dd60d_pct ?? null, rsi: p.rsi_14 ?? null,
+            warnings: p.blockers || [], warningCount: (p.blockers||[]).length,
+            estado: 'PENDING', precioEntrada: p.trade_plan?.entry_ideal_eur ?? p.price_current_eur ?? null,
+            sourceFile: file.name,
+          }));
+        } else {
+          alert('No se reconoce la estructura del JSON. Debe ser un array de señales, un export del Registro ({registro:[...]}), o un sidi_excel_payload.');
+          return;
+        }
+        procesarImportacionRegistro(filas, file.name);
+      } catch (err) {
+        alert('El archivo no es un JSON válido: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  input.value = ''; // permite reimportar el mismo archivo si hace falta
+}
+
+function procesarImportacionRegistro(filasCrudas, filename) {
+  if (!filasCrudas || !filasCrudas.length) {
+    alert('El archivo no contiene ninguna fila reconocible.');
+    return;
+  }
+
+  const registro = loadRegistro();
+  const existentes = new Set(registro.map(r => `${r.ticker}|${r.fechaDeteccion}`));
+
+  let nuevas = 0, duplicadas = 0, invalidas = 0;
+
+  filasCrudas.forEach(fila => {
+    const ticker = (fila.ticker || '').trim();
+    const fechaDeteccion = fila.fechaDeteccion || new Date().toISOString().slice(0, 10);
+    if (!ticker) { invalidas++; return; }
+
+    const clave = `${ticker}|${fechaDeteccion}`;
+    if (existentes.has(clave)) { duplicadas++; return; }
+
+    // Normalizar warnings: puede venir como string "a; b", array, o vacío
+    let warnings = fila.warnings;
+    if (typeof warnings === 'string') {
+      warnings = warnings.trim() ? warnings.split(';').map(w => w.trim()).filter(Boolean) : [];
+    } else if (!Array.isArray(warnings)) {
+      warnings = [];
+    }
+
+    const num = (v) => {
+      if (v === '' || v === null || v === undefined) return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    };
+
+    registro.push({
+      fechaDeteccion,
+      fechaRegistroTimestamp: new Date().toISOString(),
+      ticker,
+      name: fila.name || ticker,
+      sector: fila.sector || 'Unknown',
+      score: num(fila.score),
+      drawdown60: num(fila.drawdown60),
+      rsi: num(fila.rsi),
+      pe: num(fila.pe),
+      warnings,
+      warningCount: fila.warningCount !== undefined ? num(fila.warningCount) : warnings.length,
+      estado: fila.estado || 'PENDING',
+      precioEntrada: num(fila.precioEntrada),
+      precioActual: num(fila.precioActual) ?? num(fila.precioEntrada),
+      precioResolucion: num(fila.precioResolucion),
+      fechaResolucion: fila.fechaResolucion || null,
+      diasHastaResolucion: num(fila.diasHastaResolucion),
+      pnlPct: fila.pnlPct !== undefined && fila.pnlPct !== '' ? num(fila.pnlPct) : null,
+      diasTranscurridos: num(fila.diasTranscurridos) ?? 0,
+      sourceFile: fila.sourceFile || filename || '',
+    });
+    existentes.add(clave);
+    nuevas++;
+  });
+
+  saveRegistro(registro);
+  updateRegistroBadge(registro.filter(r => r.estado === 'PENDING').length);
+  renderRegistro();
+
+  let msg = `Importación completada: ${nuevas} nueva(s) señal(es) añadida(s)`;
+  if (duplicadas > 0) msg += `, ${duplicadas} ya existían (omitidas)`;
+  if (invalidas > 0) msg += `, ${invalidas} fila(s) inválida(s) (sin ticker)`;
+  alert(msg);
+}
+
 function exportRegistroCSV() {
   const registro = loadRegistro();
   if (!registro.length) { alert('El registro está vacío — no hay nada que exportar.'); return; }
@@ -4884,7 +5139,7 @@ function showTab(id) {
   }
 
   if (id === 'dashboard') setTimeout(renderDashboard, 50);
-  if (id === 'registro') setTimeout(renderRegistro, 50);
+  if (id === 'registro') setTimeout(abrirRegistro, 50);
 }
 
 function loadTickerBridge(ticker) {
