@@ -1,0 +1,64 @@
+name: Actualizar datos STOCK-RADAR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-datos-stock-radar
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    name: Ejecutar ingesta y publicar CSV
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Eliminar exportación anterior
+        run: |
+          mkdir -p data/master
+          rm -f data/master/sp500_full_export_*.csv
+          rm -f data/master/market_context.json
+
+      - name: Ejecutar ingesta completa
+        env:
+          MAX_EMPRESAS: "503"
+          YEARS_HISTORY: "2"
+          PYTHONUNBUFFERED: "1"
+        run: python main_ingesta.py
+
+      - name: Comprobar resultado
+        run: |
+          test -n "$(find data/master -maxdepth 1 -name 'sp500_full_export_*.csv' -print -quit)"
+          test -f data/master/market_context.json
+          ls -lh data/master
+
+      - name: Publicar datos actualizados
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/master/sp500_full_export_*.csv data/master/market_context.json
+          git add -u data/master
+          if git diff --cached --quiet; then
+            echo "Los datos no han cambiado; no se crea ningún commit."
+          else
+            git commit -m "data: actualizar STOCK-RADAR [skip actions]"
+            git push
+          fi
