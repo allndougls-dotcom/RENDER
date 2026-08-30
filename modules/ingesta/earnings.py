@@ -8,13 +8,15 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import time
+import os
 from datetime import datetime, timedelta
 from tqdm import tqdm
-from curl_cffi import requests as curl_requests
 
-# Sesión compartida que imita un navegador real (Chrome) para esquivar
-# el bloqueo "Invalid Crumb" que Yahoo aplica a IPs de datacenter (Render).
-_SESSION = curl_requests.Session(impersonate="chrome")
+# Activa logs internos de yfinance (cookie/crumb) si se define la variable
+# de entorno YF_DEBUG=1 en Render → Environment. Util para diagnosticar
+# el error "Invalid Crumb" viendo la causa real en vez del mensaje generico.
+if os.environ.get('YF_DEBUG') == '1':
+    yf.enable_debug_mode()
 
 
 def get_earnings_days(ticker: str) -> int:
@@ -25,7 +27,7 @@ def get_earnings_days(ticker: str) -> int:
     - 999: no disponible
     """
     try:
-        t   = yf.Ticker(ticker, session=_SESSION)
+        t   = yf.Ticker(ticker)
         cal = t.calendar
 
         # yFinance devuelve dict con 'Earnings Date' como lista de timestamps
@@ -76,7 +78,7 @@ def get_earnings_surprise_history(ticker: str) -> dict:
         'next_earnings_date':    None,
     }
     try:
-        t  = yf.Ticker(ticker, session=_SESSION)
+        t  = yf.Ticker(ticker)
         ed = t.earnings_dates  # DataFrame indexado por fecha, incluye pasado+futuro
         if ed is None or len(ed) == 0:
             return out
