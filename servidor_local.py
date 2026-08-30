@@ -351,13 +351,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         def run_ingesta():
+            inicio = datetime.now()
+            print(f"  🚀 Lanzando main_ingesta.py en background ({inicio.strftime('%H:%M:%S')})...", flush=True)
             try:
-                subprocess.run(
+                resultado = subprocess.run(
                     [sys.executable, str(BASE_DIR / "main_ingesta.py")],
                     cwd=str(BASE_DIR), timeout=3600,
                 )
+                duracion = (datetime.now() - inicio).total_seconds()
+                if resultado.returncode == 0:
+                    print(f"  ✅ Ingesta completada correctamente en {duracion:.0f}s", flush=True)
+                else:
+                    # El subproceso terminó pero con error (o fue matado por
+                    # el sistema — un returncode negativo en Unix indica que
+                    # murió por una señal, p.ej. -9 = SIGKILL = probablemente
+                    # límite de memoria del plan gratuito de Render).
+                    print(f"  ❌ Ingesta terminó con returncode={resultado.returncode} tras {duracion:.0f}s "
+                          f"({'posible OOM-kill / límite de memoria' if resultado.returncode < 0 else 'ver traceback arriba'})",
+                          flush=True)
+            except subprocess.TimeoutExpired:
+                duracion = (datetime.now() - inicio).total_seconds()
+                print(f"  ❌ Ingesta cancelada por timeout tras {duracion:.0f}s (límite: 3600s)", flush=True)
             except Exception as e:
-                print(f"  ❌ Error en ingesta background: {e}")
+                duracion = (datetime.now() - inicio).total_seconds()
+                print(f"  ❌ Error en ingesta background tras {duracion:.0f}s: {e}", flush=True)
 
         threading.Thread(target=run_ingesta, daemon=True).start()
         self.send_json({"ok": True, "message": "Actualización iniciada en background"})
