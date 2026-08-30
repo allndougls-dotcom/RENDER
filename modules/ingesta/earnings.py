@@ -10,6 +10,11 @@ import yfinance as yf
 import time
 from datetime import datetime, timedelta
 from tqdm import tqdm
+from curl_cffi import requests as curl_requests
+
+# Sesión compartida que imita un navegador real (Chrome) para esquivar
+# el bloqueo "Invalid Crumb" que Yahoo aplica a IPs de datacenter (Render).
+_SESSION = curl_requests.Session(impersonate="chrome")
 
 
 def get_earnings_days(ticker: str) -> int:
@@ -20,7 +25,7 @@ def get_earnings_days(ticker: str) -> int:
     - 999: no disponible
     """
     try:
-        t   = yf.Ticker(ticker)
+        t   = yf.Ticker(ticker, session=_SESSION)
         cal = t.calendar
 
         # yFinance devuelve dict con 'Earnings Date' como lista de timestamps
@@ -71,7 +76,7 @@ def get_earnings_surprise_history(ticker: str) -> dict:
         'next_earnings_date':    None,
     }
     try:
-        t  = yf.Ticker(ticker)
+        t  = yf.Ticker(ticker, session=_SESSION)
         ed = t.earnings_dates  # DataFrame indexado por fecha, incluye pasado+futuro
         if ed is None or len(ed) == 0:
             return out
