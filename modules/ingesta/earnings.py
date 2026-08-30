@@ -9,14 +9,15 @@ import pandas as pd
 import yfinance as yf
 import time
 import os
+import traceback
 from datetime import datetime, timedelta
 from tqdm import tqdm
 
-# Activa logs internos de yfinance (cookie/crumb) si se define la variable
-# de entorno YF_DEBUG=1 en Render → Environment. Util para diagnosticar
-# el error "Invalid Crumb" viendo la causa real en vez del mensaje generico.
-if os.environ.get('YF_DEBUG') == '1':
-    yf.enable_debug_mode()
+# Cuando falla el primer ticker de cada función, se imprime el traceback
+# completo UNA sola vez (no 503 veces) para diagnosticar la causa real,
+# en vez del "except: pass" que ocultaba el error.
+_ERROR_PRINTED_DAYS = False
+_ERROR_PRINTED_SURPRISE = False
 
 
 def get_earnings_days(ticker: str) -> int:
@@ -55,7 +56,14 @@ def get_earnings_days(ticker: str) -> int:
                 return (closest - today).days
         return 999
 
-    except Exception:
+    except Exception as e:
+        global _ERROR_PRINTED_DAYS
+        if not _ERROR_PRINTED_DAYS:
+            _ERROR_PRINTED_DAYS = True
+            print(f"\n🔴 DEBUG get_earnings_days({ticker}) — excepcion real:")
+            print(f"   Tipo: {type(e).__name__}")
+            print(f"   Mensaje: {e}")
+            traceback.print_exc()
         return 999
 
 
@@ -115,7 +123,14 @@ def get_earnings_surprise_history(ticker: str) -> dict:
         # yfinance earnings_dates no siempre trae revenue — se deja como
         # extensión futura vía FMP (analyst-estimates) en la Fase 2.
 
-    except Exception:
+    except Exception as e:
+        global _ERROR_PRINTED_SURPRISE
+        if not _ERROR_PRINTED_SURPRISE:
+            _ERROR_PRINTED_SURPRISE = True
+            print(f"\n🔴 DEBUG get_earnings_surprise_history({ticker}) — excepcion real:")
+            print(f"   Tipo: {type(e).__name__}")
+            print(f"   Mensaje: {e}")
+            traceback.print_exc()
         pass
 
     return out
