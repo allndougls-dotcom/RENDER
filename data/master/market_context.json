@@ -1,0 +1,18 @@
+{
+  "date": "2026-08-30 21:25",
+  "spy_price": 769.35,
+  "spy_ma50": 753.96,
+  "spy_ma200": 707.42,
+  "spy_rsi": 45.7,
+  "spy_vs200": 8.75,
+  "spy_dd52": -1.1,
+  "spy_ma200_slope": 1.436,
+  "spy_vol_ratio": 0.75,
+  "vix": 14.43,
+  "market_regime": "ALCISTA FUERTE",
+  "regime_color": "#22c55e",
+  "regime_icon": "🟢",
+  "regime_desc": "Tendencia alcista sana. Condiciones favorables para mean reversion.",
+  "regime_score": 10,
+  "filter_rec": "Filtros estándar (Score ≥6.5, DD ≥10%)"
+}
