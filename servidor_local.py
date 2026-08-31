@@ -12,6 +12,13 @@ redeploys de Render, cambios de version del HTML, o limpiezas de
 localStorage del navegador — la base de datos vive fuera del ciclo
 de vida del servidor.
 
+Tambien expone una API SIDI de SOLO LECTURA para ChatGPT Work:
+    /api/sidi/status
+    /api/sidi/market
+    /api/sidi/candidates
+    /api/sidi/candidates/{ticker}
+    /api/sidi/work-packet
+
 Variables de entorno necesarias para el Registro en Turso:
     TURSO_DATABASE_URL  = libsql://tu-base.tu-org.turso.io
     TURSO_AUTH_TOKEN    = el token generado en el dashboard de Turso
@@ -38,6 +45,7 @@ import webbrowser
 import subprocess
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs, unquote
 
 PORT = int(os.environ.get("PORT", 8000))
 BASE_DIR = Path(__file__).parent
@@ -81,6 +89,204 @@ def load_market_context():
     except Exception as e:
         print(f"  ⚠ Error leyendo CSV: {e}")
         return {}, []
+
+
+# ══════════════════════════════════════════════════════════════
+# SIDI WORK API — helpers de solo lectura
+# ══════════════════════════════════════════════════════════════
+
+def _float(value, default=None):
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _int(value, default=None):
+    if value is None or value == "":
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if value is None or value == "":
+        return default
+    return str(value).strip().lower() in {"true", "1", "yes", "si", "sí"}
+
+
+def _split_pipe(value):
+    if not value:
+        return []
+    return [x.strip() for x in str(value).split("|") if x.strip()]
+
+
+def _analysis_date(rows):
+    if rows:
+        date = (rows[0].get("data_vintage") or "").strip()
+        if date:
+            return date
+    latest = get_latest_csv()
+    if latest:
+        m = re.search(r"(\d{8})", latest.name)
+        if m:
+            raw = m.group(1)
+            return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _row_to_sidi_company(row):
+    """Transforma una fila del CSV maestro al paquete cuantitativo que
+    ChatGPT Work necesita. No investiga ni inventa datos externos: los
+    campos que requieren web/IR/consenso permanecen en null."""
+    price = _float(row.get("price"))
+    atr = _float(row.get("atr_14"))
+    spy_vs200 = _float(row.get("spy_vs200"))
+
+    stop_loss = round(price * 0.95, 4) if price is not None else None
+    tp1 = round(price + atr, 4) if price is not None and atr is not None else None
+    tp2 = round(price + 1.5 * atr, 4) if price is not None and atr is not None else None
+
+    warnings_raw = (row.get("warnings") or "").strip()
+    warnings = [] if not warnings_raw or warnings_raw.upper() == "OK" else _split_pipe(warnings_raw)
+
+    return {
+        "ticker": row.get("ticker"),
+        "name": row.get("name"),
+        "sector": row.get("sector"),
+        "industry": row.get("industry") or None,
+        "subsector": row.get("subsector") or None,
+        "selection": {
+            "setup_hot": _bool(row.get("setup_hot")),
+            "full_setup": _bool(row.get("full_setup")),
+            "combined_score": _float(row.get("combined_score")),
+            "horizon": row.get("horizon") or None,
+        },
+        "market_context": {
+            "regime": row.get("market_regime") or "DESCONOCIDO",
+            "spy_above_sma200": (spy_vs200 >= 0) if spy_vs200 is not None else None,
+            "spy_vs_sma200_pct": spy_vs200,
+            "spy_price": _float(row.get("spy_price")),
+            "spy_rsi": _float(row.get("spy_rsi")),
+            "vix": _float(row.get("vix")),
+        },
+        "technical": {
+            "price": price,
+            "drawdown_60d_pct": abs(_float(row.get("drawdown_60d"), 0.0)),
+            "rsi_14": _float(row.get("rsi_14")),
+            "macd_improving": _bool(row.get("macd_improving")),
+            "golden_cross": _bool(row.get("golden_cross")),
+            "near_support": _bool(row.get("near_support")),
+            "trend_bias": row.get("trend_bias") or None,
+            "technical_score": _float(row.get("tech_score")),
+            "sma_50": _float(row.get("sma_50")),
+            "sma_200": _float(row.get("sma_200")),
+            "price_vs_200ma_pct": _float(row.get("price_vs_200ma_pct")),
+            "atr": atr,
+        },
+        "risk_plan": {
+            "stop_loss_pct": -5.0,
+            "stop_loss": stop_loss,
+            "target_tp1_1x_atr": tp1,
+            "target_tp2_1_5x_atr": tp2,
+        },
+        "fundamentals": {
+            "fundamental_score": _float(row.get("fund_score")),
+            "growth_score": _float(row.get("fund_growth")),
+            "solidity_score": _float(row.get("fund_solidity")),
+            "valuation_score": _float(row.get("fund_valuation")),
+            "pe": _float(row.get("pe")),
+            "forward_pe": _float(row.get("forward_pe")),
+            "roe_pct": (_float(row.get("roe")) * 100) if _float(row.get("roe")) is not None else None,
+            "debt_equity": _float(row.get("debt_equity")),
+            "fcf_ni_ratio": _float(row.get("fcf_ni_ratio")),
+            "fcf_yield_pct": (_float(row.get("fcf_yield_calc")) * 100) if _float(row.get("fcf_yield_calc")) is not None else None,
+            "revenue_growth_pct": (_float(row.get("revenue_growth")) * 100) if _float(row.get("revenue_growth")) is not None else None,
+            "eps_growth_pct": (_float(row.get("eps_growth")) * 100) if _float(row.get("eps_growth")) is not None else None,
+            "shares_yoy_pct": None,
+        },
+        "earnings_data": {
+            "earnings_days_next": _int(row.get("earnings_days_next")),
+            "earnings_within_7_days": (_int(row.get("earnings_days_next")) <= 7) if _int(row.get("earnings_days_next")) is not None else None,
+            "next_earnings_date": row.get("earnings_date") or None,
+            "latest_earnings_date": row.get("latest_earnings_date") or None,
+            "eps_actual": _float(row.get("eps_actual")),
+            "eps_estimate": _float(row.get("eps_estimate")),
+            "eps_surprise_pct": _float(row.get("eps_surprise_pct")),
+            "revenue_actual": None,
+            "revenue_estimate": None,
+            "revenue_surprise_pct": None,
+            "guidance_status": None,
+            "margin_trend": None,
+        },
+        "sector_context": {
+            "sector_etf": row.get("sector_etf") or None,
+            "peer_group": _split_pipe(row.get("peer_group")),
+            "critical_macro_variables": _split_pipe(row.get("critical_macro_variables")),
+        },
+        "analyst_revisions": {
+            "eps_revision_trend": None,
+            "revenue_revision_trend": None,
+            "price_target_trend": None,
+            "rating_trend": None,
+            "revision_breadth": None,
+        },
+        "raw_news": [],
+        "technical_alerts": {
+            "warnings": warnings,
+            "warning_count": _int(row.get("warning_count"), 0),
+            "market_filter_rec": row.get("market_filter_rec") or None,
+        },
+        "data_metadata": {
+            "data_vintage": row.get("data_vintage") or None,
+            "source": "SIDI master CSV",
+        },
+    }
+
+
+def _select_sidi_rows(rows, scope="hot", tickers=None):
+    scope = (scope or "hot").strip().lower()
+    if scope in {"full", "full_setup", "signal", "signals"}:
+        selected = [r for r in rows if _bool(r.get("full_setup"))]
+        normalized_scope = "full_setup"
+    elif scope in {"all", "universe"}:
+        selected = list(rows)
+        normalized_scope = "all"
+    else:
+        selected = [r for r in rows if _bool(r.get("setup_hot"))]
+        normalized_scope = "setup_hot"
+
+    if tickers:
+        wanted = {t.strip().upper() for t in tickers if t.strip()}
+        selected = [r for r in selected if (r.get("ticker") or "").upper() in wanted]
+
+    return normalized_scope, selected
+
+
+def _build_work_packet(rows, scope="hot", tickers=None):
+    normalized_scope, selected = _select_sidi_rows(rows, scope, tickers)
+    return {
+        "schema_version": "SIDI_WORK_PACKET_V1",
+        "analysis_date": _analysis_date(rows),
+        "selection_scope": normalized_scope,
+        "candidate_count": len(selected),
+        "operational_parameters": {
+            "base_capital_eur": 10000,
+            "max_risk_per_trade_pct": 1.5,
+            "max_risk_per_trade_eur": 150,
+            "max_simultaneous_positions": 3,
+            "tp1_sell_pct": 50,
+            "tp2_sell_pct": 50,
+            "after_tp1": "move_remaining_stop_to_break_even",
+        },
+        "companies": [_row_to_sidi_company(r) for r in selected],
+    }
 
 
 # ══════════════════════════════════════════════════════════════
@@ -141,7 +347,6 @@ def get_turso_conn():
 
 def registro_row_to_dict(row, cols):
     d = dict(zip(cols, row))
-    # warnings se guarda como JSON string en la columna TEXT
     if d.get("warnings"):
         try:
             d["warnings"] = json.loads(d["warnings"])
@@ -243,24 +448,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
 
     def do_GET(self):
-        if self.path == "/" or self.path == "":
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
+
+        if path == "/" or path == "":
             self.handle_root()
-        elif self.path == "/status":
+        elif path == "/status":
             self.handle_status()
-        elif self.path == "/data":
+        elif path == "/data":
             self.handle_data()
-        elif self.path == "/market":
+        elif path == "/market":
             self.handle_market()
-        elif self.path == "/hot":
+        elif path == "/hot":
             self.handle_hot()
-        elif self.path == "/mobile" or self.path == "/stock-radar-v3.html":
+        elif path == "/mobile" or path == "/stock-radar-v3.html":
             self.serve_app()
-        elif self.path == "/api/latest-csv":
+        elif path == "/api/latest-csv":
             self.handle_latest_csv()
-        elif self.path == "/api/registro":
+        elif path == "/api/registro":
             self.handle_registro_get()
+        elif path == "/api/sidi/status":
+            self.handle_sidi_status()
+        elif path == "/api/sidi/market":
+            self.handle_sidi_market()
+        elif path == "/api/sidi/candidates":
+            self.handle_sidi_candidates(query)
+        elif path == "/api/sidi/work-packet":
+            self.handle_sidi_work_packet(query)
         else:
-            super().do_GET()
+            m = re.match(r"^/api/sidi/candidates/([^/]+)$", path)
+            if m:
+                self.handle_sidi_candidate(unquote(m.group(1)))
+            else:
+                super().do_GET()
 
     def do_POST(self):
         if self.path == "/trigger":
@@ -296,12 +517,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_json({
             "service": "STOCK-RADAR Cloud API",
             "status": "ok",
-            "version": "1.1",
+            "version": "1.2",
             "empresas": len(rows),
             "registro_backend": "turso" if turso_disponible() else "no configurado (usa localStorage)",
             "updated": datetime.now().isoformat(),
-            "endpoints": ["/status", "/data", "/market", "/hot", "/trigger", "/mobile",
-                          "/api/latest-csv", "/api/registro (GET/POST/DELETE)"],
+            "endpoints": [
+                "/status", "/data", "/market", "/hot", "/trigger", "/mobile",
+                "/api/latest-csv", "/api/registro (GET/POST/DELETE)",
+                "/api/sidi/status", "/api/sidi/market", "/api/sidi/candidates",
+                "/api/sidi/candidates/{ticker}", "/api/sidi/work-packet"
+            ],
         })
 
     def handle_status(self):
@@ -344,6 +569,79 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "size_kb": round(latest.stat().st_size / 1024, 1),
         })
 
+    # ── SIDI Work API (solo lectura) ────────────────────────────
+    def handle_sidi_status(self):
+        latest = get_latest_csv()
+        market, rows = load_market_context()
+        _, hot_rows = _select_sidi_rows(rows, "hot")
+        _, full_rows = _select_sidi_rows(rows, "full")
+        self.send_json({
+            "ok": True,
+            "schema_version": "SIDI_WORK_PACKET_V1",
+            "analysis_date": _analysis_date(rows),
+            "latest_csv": latest.name if latest else None,
+            "universe_count": len(rows),
+            "setup_hot_count": len(hot_rows),
+            "full_setup_count": len(full_rows),
+            "market_regime": market.get("regime", "N/D"),
+            "updated": datetime.now().isoformat(),
+        })
+
+    def handle_sidi_market(self):
+        market, rows = load_market_context()
+        self.send_json({
+            "analysis_date": _analysis_date(rows),
+            "market_context": market,
+        })
+
+    def handle_sidi_candidates(self, query):
+        _, rows = load_market_context()
+        scope = (query.get("scope", ["hot"])[0] or "hot").strip()
+        normalized_scope, selected = _select_sidi_rows(rows, scope)
+        candidates = []
+        for r in selected:
+            candidates.append({
+                "ticker": r.get("ticker"),
+                "name": r.get("name"),
+                "sector": r.get("sector"),
+                "industry": r.get("industry") or None,
+                "fundamental_score": _float(r.get("fund_score")),
+                "technical_score": _float(r.get("tech_score")),
+                "combined_score": _float(r.get("combined_score")),
+                "drawdown_60d_pct": abs(_float(r.get("drawdown_60d"), 0.0)),
+                "rsi_14": _float(r.get("rsi_14")),
+                "setup_hot": _bool(r.get("setup_hot")),
+                "full_setup": _bool(r.get("full_setup")),
+                "earnings_days_next": _int(r.get("earnings_days_next")),
+            })
+        self.send_json({
+            "analysis_date": _analysis_date(rows),
+            "selection_scope": normalized_scope,
+            "count": len(candidates),
+            "candidates": candidates,
+        })
+
+    def handle_sidi_candidate(self, ticker):
+        _, rows = load_market_context()
+        ticker = (ticker or "").strip().upper()
+        row = next((r for r in rows if (r.get("ticker") or "").strip().upper() == ticker), None)
+        if not row:
+            self.send_json({"error": "ticker_not_found", "ticker": ticker}, status=404)
+            return
+        self.send_json({
+            "schema_version": "SIDI_WORK_PACKET_V1",
+            "analysis_date": _analysis_date(rows),
+            "company": _row_to_sidi_company(row),
+        })
+
+    def handle_sidi_work_packet(self, query):
+        _, rows = load_market_context()
+        scope = (query.get("scope", ["hot"])[0] or "hot").strip()
+        tickers_raw = query.get("tickers", [""])[0]
+        tickers = [t for t in tickers_raw.split(",") if t.strip()] if tickers_raw else None
+        packet = _build_work_packet(rows, scope=scope, tickers=tickers)
+        self.send_json(packet)
+
     def handle_trigger(self):
         token = self.headers.get("X-Update-Token", "")
         if token != UPDATE_TOKEN:
@@ -362,10 +660,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if resultado.returncode == 0:
                     print(f"  ✅ Ingesta completada correctamente en {duracion:.0f}s", flush=True)
                 else:
-                    # El subproceso terminó pero con error (o fue matado por
-                    # el sistema — un returncode negativo en Unix indica que
-                    # murió por una señal, p.ej. -9 = SIGKILL = probablemente
-                    # límite de memoria del plan gratuito de Render).
                     print(f"  ❌ Ingesta terminó con returncode={resultado.returncode} tras {duracion:.0f}s "
                           f"({'posible OOM-kill / límite de memoria' if resultado.returncode < 0 else 'ver traceback arriba'})",
                           flush=True)
@@ -455,16 +749,6 @@ def main():
 
     class ThreadingHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         daemon_threads = True
-        # IMPORTANTE: allow_reuse_address debe ser atributo de CLASE, no de
-        # instancia. TCPServer.__init__() ya hace el bind() del socket
-        # dentro del propio constructor — si se pone httpd.allow_reuse_address
-        # = True DESPUÉS de crear la instancia, ya es demasiado tarde: el
-        # bind ya se intentó (y podía fallar con "Address already in use"
-        # si el socket anterior seguía en estado TIME_WAIT, algo habitual
-        # en Render cuando el proceso se reinicia). Sin este fix, un solo
-        # fallo de arranque entraba en bucle infinito de reinicio-crash,
-        # matando cualquier ingesta en curso en un hilo de background cada
-        # vez que el proceso se reiniciaba.
         allow_reuse_address = True
 
     with ThreadingHTTPServer(("0.0.0.0", PORT), Handler) as httpd:
