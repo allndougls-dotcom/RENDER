@@ -8,6 +8,11 @@ Régimenes:
 - LATERAL         : Precio cerca de MA200 (±3%), sin tendencia clara
 - CORRECCIÓN      : Precio entre -5% y -15% bajo MA200
 - BAJISTA         : Precio > -15% bajo MA200
+
+AMPLIADO: además del snapshot puntual, se exporta ahora un histórico de
+los últimos HISTORY_DAYS días (precio de cierre + MA200 día a día) para
+poder pintar un gráfico de evolución en la app — antes solo se exportaba
+el valor del día, sin contexto histórico visual.
 """
 
 import numpy as np
@@ -15,12 +20,17 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 
+HISTORY_DAYS = 250  # ~1 año de sesiones bursátiles, suficiente para ver todo el tramo con MA200 ya formada
+
 
 def get_market_context() -> dict:
-    """Descarga SPY + VIX y calcula el régimen de mercado actual."""
+    """Descarga SPY + VIX y calcula el régimen de mercado actual + histórico."""
     try:
         end   = datetime.today().strftime('%Y-%m-%d')
-        start = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
+        # Se pide bastante más histórico del que se exporta (250d) para que
+        # la MA200 del PRIMER día exportado ya esté bien formada (necesita
+        # 200 días previos de datos para calcularse), no truncada/NaN.
+        start = (datetime.today() - timedelta(days=365 * 2 + 60)).strftime('%Y-%m-%d')
 
         spy = yf.download('SPY', start=start, end=end,
                           auto_adjust=True, progress=False)
@@ -41,7 +51,8 @@ def get_market_context() -> dict:
         gain   = delta.clip(lower=0).rolling(14).mean()
         loss   = (-delta.clip(upper=0)).rolling(14).mean()
         rs     = gain / loss.replace(0, np.nan)
-        rsi    = float((100 - 100 / (1 + rs)).iloc[-1])
+        rsi_series = (100 - 100 / (1 + rs)).round(2)
+        rsi    = float(rsi_series.iloc[-1])
 
         # Drawdown desde máximo de 52 semanas
         high52 = float(closes.iloc[-252:].max()) if n >= 252 else float(closes.max())
@@ -58,6 +69,22 @@ def get_market_context() -> dict:
         vol20  = float(closes.pct_change().rolling(20).std().iloc[-1]) * 100
         vol60  = float(closes.pct_change().rolling(60).std().iloc[-1]) * 100
         vol_ratio = vol20 / vol60 if vol60 > 0 else 1.0
+
+        # ── Histórico para el gráfico (precio + MA200 + RSI, últimos HISTORY_DAYS) ──
+        ma200_series = closes.rolling(200).mean()
+        history_dates  = spy.index[-HISTORY_DAYS:]
+        history_close  = closes.iloc[-HISTORY_DAYS:]
+        history_ma200  = ma200_series.iloc[-HISTORY_DAYS:]
+        history_rsi    = rsi_series.iloc[-HISTORY_DAYS:]
+
+        history = []
+        for d, c, m, r in zip(history_dates, history_close, history_ma200, history_rsi):
+            history.append({
+                'date':  d.strftime('%Y-%m-%d'),
+                'close': round(float(c), 2),
+                'ma200': round(float(m), 2) if not pd.isna(m) else None,
+                'rsi':   round(float(r), 1) if not pd.isna(r) else None,
+            })
 
         # ── VIX (índice de volatilidad) ────────────────────────────
         # Se descarga aparte porque un fallo aquí no debe tumbar todo
@@ -135,6 +162,7 @@ def get_market_context() -> dict:
             'regime_desc':   regime_desc,
             'regime_score':  regime_score,
             'filter_rec':    filter_rec,
+            'history':       history,
         }
 
     except Exception as e:
@@ -160,6 +188,7 @@ def _default_context() -> dict:
         'regime_desc':     'No se pudo obtener el contexto de mercado.',
         'regime_score':    5,
         'filter_rec':      'Filtros estándar',
+        'history':         [],
     }
 
 
