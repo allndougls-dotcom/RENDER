@@ -1,6 +1,12 @@
 name: Actualizar datos STOCK-RADAR
 on:
   workflow_dispatch:
+  schedule:
+    # GitHub Actions usa UTC. Se programan las dos equivalencias posibles
+    # de las 22:30 en Europe/Madrid y el primer paso elige la correcta
+    # según esté vigente el horario de verano (+02:00) o invierno (+01:00).
+    - cron: "30 20 * * 1-5"
+    - cron: "30 21 * * 1-5"
 permissions:
   contents: write
 concurrency:
@@ -12,34 +18,63 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
+      - name: Comprobar horario peninsular
+        id: horario
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Ejecución manual autorizada."
+            exit 0
+          fi
+
+          OFFSET_MADRID="$(TZ=Europe/Madrid date +%z)"
+          if { [ "$OFFSET_MADRID" = "+0200" ] && [ "$EVENT_SCHEDULE" = "30 20 * * 1-5" ]; } || \
+             { [ "$OFFSET_MADRID" = "+0100" ] && [ "$EVENT_SCHEDULE" = "30 21 * * 1-5" ]; }; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Es el disparador correspondiente a las 22:30 de Europe/Madrid."
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Disparador UTC auxiliar omitido para evitar una ejecución duplicada."
+          fi
+
       - name: Descargar repositorio
+        if: steps.horario.outputs.should_run == 'true'
         uses: actions/checkout@v4
       - name: Configurar Python
+        if: steps.horario.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
       - name: Instalar dependencias
+        if: steps.horario.outputs.should_run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Eliminar exportación anterior
+        if: steps.horario.outputs.should_run == 'true'
         run: |
           mkdir -p data/master
           rm -f data/master/sp500_full_export_*.csv
           rm -f data/master/market_context.json
       - name: Ejecutar ingesta completa
+        if: steps.horario.outputs.should_run == 'true'
         env:
           MAX_EMPRESAS: "503"
           YEARS_HISTORY: "2"
           PYTHONUNBUFFERED: "1"
         run: python main_ingesta.py
       - name: Comprobar resultado
+        if: steps.horario.outputs.should_run == 'true'
         run: |
           test -n "$(find data/master -maxdepth 1 -name 'sp500_full_export_*.csv' -print -quit)"
           test -f data/master/market_context.json
           ls -lh data/master
       - name: Publicar datos actualizados
+        if: steps.horario.outputs.should_run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
