@@ -1459,13 +1459,13 @@ body::before {
     <span>vs MA200 <strong id="spyVs200">—</strong></span>
     <span>RSI <strong id="spyRsi">—</strong></span>
     <span id="marketRecPill" class="market-rec">—</span>
-    <button onclick="toggleMarketDetailPanel()" id="marketDetailToggleBtn" style="background:rgba(110,168,254,0.12);border:1px solid var(--blue);border-radius:4px;padding:3px 10px;color:var(--blue);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:1px">📊 VER GRÁFICO</button>
   </div>
   <div id="marketDesc" style="font-size:10px;color:var(--text2);max-width:400px;text-align:right"></div>
 </div>
 
-<div id="marketDetailPanel" style="display:none;background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 28px">
-  <div style="display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:start;max-width:1100px;margin:0 auto">
+<div id="marketDetailPanel" style="display:block;background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 28px">
+  <div style="display:flex;justify-content:center">
+  <div style="display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:start;max-width:1100px;width:100%">
 
     <!-- Velocímetro del régimen de mercado -->
     <div style="text-align:center">
@@ -1482,6 +1482,7 @@ body::before {
         <svg id="spyChartSVG" viewBox="0 0 700 220" style="width:100%;display:none"></svg>
       </div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -2187,7 +2188,7 @@ function renderTable() {
     tr.onclick = () => openModal(d);
     tr.innerHTML = `
       <td onclick="event.stopPropagation()"><input type="checkbox" class="scanner-row-check" value="${d.ticker}" ${isChecked?'checked':''} onchange="toggleScannerSelect(this)" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer"></td>
-      <td style="font-weight:600;color:#fff">${d.ticker}</td>
+      <td style="font-weight:600;color:#fff"><img src="https://img.logo.dev/ticker/${d.ticker}?token=${LOGO_DEV_TOKEN}&size=32&format=png" alt="" width="18" height="18" style="border-radius:4px;vertical-align:middle;margin-right:6px;background:#fff" onerror="this.style.display='none'" loading="lazy">${d.ticker}</td>
       <td style="color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis">${d.name}</td>
       <td><span class="sector-tag">${d.sector}</span></td>
       <td><span class="score-badge ${scoreCls}">${d.score.toFixed(1)}</span></td>
@@ -2778,7 +2779,7 @@ function populateAIList() {
     div.className = 'company-check';
     div.innerHTML = `
       <input type="checkbox" value="${d.ticker}" onchange="toggleCompany(this)">
-      <span class="company-check-name">${d.ticker} — ${d.name}${warnBadge}${alertBadge}</span>
+      <span class="company-check-name"><img src="https://img.logo.dev/ticker/${d.ticker}?token=${LOGO_DEV_TOKEN}&size=32&format=png" alt="" width="16" height="16" style="border-radius:3px;vertical-align:middle;margin-right:5px;background:#fff" onerror="this.style.display='none'" loading="lazy">${d.ticker} — ${d.name}${warnBadge}${alertBadge}</span>
       <span class="company-check-score">★ ${d.score.toFixed(1)}</span>
     `;
     div.onclick = (e) => { if (e.target.tagName !== 'INPUT') div.querySelector('input').click(); };
@@ -4301,6 +4302,9 @@ function getSyncedUniverse() {
 // recargar/volver a cargar el CSV pasado ese tiempo.
 // ══════════════════════════════════════════════════════════════
 const INGESTA_TOKEN = 'stock-radar-2026'; // debe coincidir con UPDATE_TOKEN en Render
+// Publishable key de logo.dev — segura para exponer en frontend (no da acceso
+// a nada sensible, solo permite consultar logos). Ver https://logo.dev/dashboard
+const LOGO_DEV_TOKEN = 'pk_lnSBETYtRdWnQy1tszW-aw';
 
 // ══════════════════════════════════════════════════════════════
 // BARRA DE PROGRESO GLOBAL — usada tanto por triggerIngesta() (progreso
@@ -4710,15 +4714,6 @@ async function cargarHistoricoSPY() {
     __spyHistorico = null;
     renderMarketGauge(); // el velocimetro SI puede renderizar solo con el snapshot
   }
-}
-
-function toggleMarketDetailPanel() {
-  const panel = document.getElementById('marketDetailPanel');
-  const btn = document.getElementById('marketDetailToggleBtn');
-  const abrir = panel.style.display === 'none';
-  panel.style.display = abrir ? 'block' : 'none';
-  btn.textContent = abrir ? '📊 OCULTAR GRÁFICO' : '📊 VER GRÁFICO';
-  if (abrir) { renderMarketGauge(); renderSPYChart(); }
 }
 
 // ── Velocímetro del régimen de mercado (SVG, aguja semicircular) ──
@@ -5593,6 +5588,8 @@ function updateMarketBanner(ctx) {
   banner.style.borderBottomColor = color + '40';
 
   detail.style.display = 'flex';
+
+  renderMarketGauge(); // el velocímetro es siempre visible, se actualiza en cuanto llega contexto nuevo
 }
 
 // Include market context in AI prompt
