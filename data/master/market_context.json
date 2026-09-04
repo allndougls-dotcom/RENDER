@@ -1,14 +1,14 @@
 {
-  "date": "2026-09-03 22:42",
-  "spy_price": 765.16,
-  "spy_ma50": 755.34,
-  "spy_ma200": 708.78,
-  "spy_rsi": 35.6,
-  "spy_vs200": 7.95,
-  "spy_dd52": -1.64,
-  "spy_ma200_slope": 1.393,
-  "spy_vol_ratio": 0.57,
-  "vix": 15.2,
+  "date": "2026-09-04 22:26",
+  "spy_price": 773.17,
+  "spy_ma50": 756.14,
+  "spy_ma200": 709.32,
+  "spy_rsi": 46.9,
+  "spy_vs200": 9.0,
+  "spy_dd52": -0.61,
+  "spy_ma200_slope": 1.39,
+  "spy_vol_ratio": 0.63,
+  "vix": 14.32,
   "market_regime": "ALCISTA FUERTE",
   "regime_color": "#22c55e",
   "regime_icon": "🟢",
@@ -16,12 +16,6 @@
   "regime_score": 10,
   "filter_rec": "Filtros estándar (Score ≥6.5, DD ≥10%)",
   "history": [
-    {
-      "date": "2025-09-05",
-      "close": 640.15,
-      "ma200": 586.56,
-      "rsi": 54.1
-    },
     {
       "date": "2025-09-08",
       "close": 641.72,
@@ -1515,6 +1509,12 @@
       "close": 765.16,
       "ma200": 708.78,
       "rsi": 35.6
+    },
+    {
+      "date": "2026-09-03",
+      "close": 773.17,
+      "ma200": 709.32,
+      "rsi": 46.9
     }
   ]
 }
