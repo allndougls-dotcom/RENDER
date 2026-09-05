@@ -39,8 +39,8 @@ jobs:
         working-directory: spot-grid-backtest
         run: |
           python download_ohlcv.py \
-            --exchange binance \
-            --symbols "BTC/USDT" \
+            --exchange kraken \
+            --symbols "BTC/USD" \
             --timeframe 1h \
             --start 2026-08-01 \
             --end 2026-09-01 \
@@ -51,7 +51,7 @@ jobs:
         working-directory: spot-grid-backtest
         run: |
           python grid_backtest.py \
-            --input data/BTC_USDT_1h_20260801_20260901.parquet \
+            --input data/BTC_USD_1h_20260801_20260901.parquet \
             --capital 10000 \
             --fee 0.001 \
             --lower-pcts "5,10" \
