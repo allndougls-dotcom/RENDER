@@ -1,0 +1,71 @@
+name: Spot Grid Backtest Smoke Test
+
+on:
+  push:
+    branches:
+      - spot-grid-backtest
+    paths:
+      - 'spot-grid-backtest/**'
+      - '.github/workflows/grid-backtest-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: spot-grid-backtest/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r spot-grid-backtest/requirements.txt
+
+      - name: Syntax check
+        run: |
+          python -m py_compile spot-grid-backtest/download_ohlcv.py
+          python -m py_compile spot-grid-backtest/grid_backtest.py
+
+      - name: Download a small BTC dataset
+        working-directory: spot-grid-backtest
+        run: |
+          python download_ohlcv.py \
+            --exchange binance \
+            --symbols "BTC/USDT" \
+            --timeframe 1h \
+            --start 2026-08-01 \
+            --end 2026-09-01 \
+            --output-dir data \
+            --format parquet
+
+      - name: Run small backtest
+        working-directory: spot-grid-backtest
+        run: |
+          python grid_backtest.py \
+            --input data/BTC_USDT_1h_20260801_20260901.parquet \
+            --capital 10000 \
+            --fee 0.001 \
+            --lower-pcts "5,10" \
+            --upper-pcts "5,10" \
+            --grids "10,20" \
+            --grid-types "arithmetic,geometric" \
+            --objective calmar \
+            --top 10 \
+            --output-prefix smoke_BTC
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: spot-grid-smoke-results
+          path: |
+            spot-grid-backtest/smoke_BTC_train_all.csv
+            spot-grid-backtest/smoke_BTC_top_test.csv
