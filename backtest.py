@@ -109,6 +109,11 @@ VARIANTES = [
      'stop_pct':0.05,'max_hold':15,'confirmacion':False,'time_stop':15,'spy_filter':False,
      'min_fund_score':6.5,'max_warnings':0,
      'desc':'fund_score>=6.5 + sin warnings activos (mas fiel a la app real)'},
+    {'nombre':'SCORE_65_MINWARN1','rsi':40,'dd':12.0,'target_atr':True,'atr_mult':1.5,
+     'stop_pct':0.05,'max_hold':15,'confirmacion':False,'time_stop':15,'spy_filter':False,
+     'min_fund_score':6.5,'min_warnings':1,
+     'desc':'fund_score>=6.5 + AL MENOS 1 warning activo (opuesto de MAXWARN0, '
+            'para comparar directamente con/sin warning sobre el mismo histórico)'},
 
     # ── COMBINADAS: mejor drawdown técnico + filtro de calidad ────
     # Buscan capturar el retorno alto de DD_10/DD_8 pero con el
@@ -141,6 +146,12 @@ VARIANTES = [
      'stop_pct':0.05,'max_hold':15,'confirmacion':False,'time_stop':15,'spy_filter':False,
      'min_fund_score':6.5,'exclude_sectors':['Financials','Communication Services'],
      'desc':'DD10_SCORE65 + excluye Financials y Communication Services (ambos peor WR en 4 analisis)'},
+    {'nombre':'DD10_SCORE65_SECTORREGIME','rsi':40,'dd':10.0,'target_atr':True,'atr_mult':1.5,
+     'stop_pct':0.05,'max_hold':15,'confirmacion':False,'time_stop':15,'spy_filter':False,
+     'min_fund_score':6.5,'sector_regime_filter':True,
+     'desc':'DD10_SCORE65 + filtro dinamico: ETF del sector > SMA200 en la fecha de la señal '
+            '(generaliza la exclusion fija de Financials/Comm.Services — no compra mean reversion '
+            'en NINGUN sector que este en tendencia bajista de fondo, sea cual sea)'},
     {'nombre':'DD10_SCORE65_TS10','rsi':40,'dd':10.0,'target_atr':True,'atr_mult':1.5,
      'stop_pct':0.05,'max_hold':15,'confirmacion':False,'time_stop':10,'spy_filter':False,
      'min_fund_score':6.5,
@@ -391,6 +402,112 @@ def download_spy(start_date=None, end_date=None):
         return {}
 
 
+# ══════════════════════════════════════════════════════════════════
+# FILTRO DE RÉGIMEN SECTORIAL DINÁMICO
+# ══════════════════════════════════════════════════════════════════
+# En vez de excluir sectores fijos (ej. Financials, Communication
+# Services — detectados como peores en el análisis de fallos histórico),
+# este filtro exige que el ETF del sector de la empresa esté por encima
+# de su propia SMA200 EN LA FECHA DE LA SEÑAL (no la fecha de hoy —
+# importante para no introducir look-ahead bias temporal: una señal de
+# hace 8 meses se evalúa contra el régimen sectorial de hace 8 meses).
+#
+# Hipótesis: no comprar mean reversion en un sector que está en
+# tendencia bajista de fondo, sea cual sea ese sector — más generalizable
+# que una lista fija de sectores "malos", que puede quedar obsoleta si
+# el liderazgo de mercado rota.
+
+SECTOR_ETF_MAP = {
+    'Technology':             'XLK',
+    'Information Technology': 'XLK',
+    'Financials':              'XLF',
+    'Financial Services':      'XLF',
+    'Health Care':              'XLV',
+    'Healthcare':               'XLV',
+    'Energy':                   'XLE',
+    'Consumer Discretionary':   'XLY',
+    'Consumer Staples':         'XLP',
+    'Industrials':              'XLI',
+    'Materials':                 'XLB',
+    'Utilities':                 'XLU',
+    'Real Estate':               'XLRE',
+    'Communication Services':    'XLC',
+}
+
+
+def download_sector_regime(start_date=None, end_date=None):
+    """
+    Descarga los ~11 ETFs sectoriales SPDR y calcula, día a día, si cada
+    uno está por encima de su propia SMA200. Devuelve:
+        { 'XLK': {'2024-01-15': True, '2024-01-16': False, ...}, ... }
+    Mismo patrón que download_spy() pero un dict por cada ETF sectorial.
+    Descarga ligera: 11 tickers, no 503.
+    """
+    if start_date and end_date:
+        start = (pd.to_datetime(start_date) - timedelta(days=365)).strftime('%Y-%m-%d')
+        end = end_date
+    else:
+        end   = datetime.today().strftime('%Y-%m-%d')
+        start = (datetime.today() - timedelta(days=365 * 3)).strftime('%Y-%m-%d')
+
+    etfs = sorted(set(SECTOR_ETF_MAP.values()))
+    regime_by_etf = {}
+
+    for etf in etfs:
+        try:
+            raw = yf.download(etf, start=start, end=end, auto_adjust=True, progress=False)
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            raw = raw.reset_index()
+            close_col = raw['Close']
+            if isinstance(close_col, pd.DataFrame):
+                close_col = close_col.iloc[:, 0]
+            c = close_col.astype(float)
+            ma200 = c.rolling(200).mean()
+            above = (c > ma200).values
+
+            etf_dict = {}
+            for i, row in raw.iterrows():
+                date_str = str(row['Date'])[:10]
+                if not pd.isna(above[i]):
+                    etf_dict[date_str] = bool(above[i])
+            regime_by_etf[etf] = etf_dict
+        except Exception as e:
+            print(f"  ⚠ Error descargando {etf}: {e} — ese sector quedará sin filtro de régimen")
+            regime_by_etf[etf] = {}
+
+    n_ok = sum(1 for d in regime_by_etf.values() if d)
+    print(f"  Régimen sectorial OK: {n_ok}/{len(etfs)} ETFs descargados")
+    return regime_by_etf
+
+
+def sector_esta_alcista(sector, date_str, sector_regime, default=True):
+    """
+    Consulta si el ETF del sector dado está por encima de su SMA200 en
+    date_str. Si no hay dato exacto para esa fecha (fin de semana, ETF
+    sin datos ese día), busca el día hábil anterior más próximo dentro
+    de una ventana de 5 días — igual que hace la app con precios. Si no
+    se encuentra nada, se usa `default` (True = conservador, no bloquea
+    señales por falta de dato, evita descartar de más por huecos de datos).
+    """
+    etf = SECTOR_ETF_MAP.get(sector)
+    if not etf or etf not in sector_regime or not sector_regime[etf]:
+        return default
+
+    etf_dict = sector_regime[etf]
+    if date_str in etf_dict:
+        return etf_dict[date_str]
+
+    # Buscar hacia atrás hasta 5 días (fines de semana / festivos)
+    fecha = datetime.strptime(date_str, '%Y-%m-%d')
+    for i in range(1, 6):
+        f_prev = (fecha - timedelta(days=i)).strftime('%Y-%m-%d')
+        if f_prev in etf_dict:
+            return etf_dict[f_prev]
+
+    return default
+
+
 def build_indicators(prices):
     indicators = {}
     for ticker, df in prices.items():
@@ -463,14 +580,16 @@ def get_median_atr_group(ticker_indicators):
     return max(set(groups), key=groups.count)
 
 
-def build_signal_map(indicators, var, spy_dict, date_from=None, date_to=None, fund_scores=None):
+def build_signal_map(indicators, var, spy_dict, date_from=None, date_to=None, fund_scores=None, sector_regime=None):
     signal_map = {}
     n_sigs = 0
     atr_filter      = var.get("atr_filter", None)
     min_score       = var.get("min_fund_score", None)
     max_warnings    = var.get("max_warnings", None)
+    min_warnings    = var.get("min_warnings", None)  # opuesto de max_warnings: exige AL MENOS N warnings
     exclude_sectors = var.get("exclude_sectors", None)  # lista de sectores a excluir
     rsi_exclude_range = var.get("rsi_exclude_range", None)  # tupla (min, max) a excluir
+    sector_regime_filter = var.get("sector_regime_filter", False)  # filtro dinámico: ETF sector > SMA200 en fecha de señal
 
     # Pre-calcular grupo ATR mediano por ticker (mas estable que calcular por señal)
     ticker_atr_groups = {}
@@ -500,6 +619,15 @@ def build_signal_map(indicators, var, spy_dict, date_from=None, date_to=None, fu
             if fund_scores[ticker]['warning_count'] > max_warnings:
                 continue
 
+        # Filtro de warnings mínimos exigidos (opuesto de max_warnings — para
+        # comparar directamente "con warning" vs "sin warning" sobre el
+        # mismo histórico y mismas fechas, no solo excluir uno de los grupos)
+        if min_warnings is not None:
+            if not fund_scores or ticker not in fund_scores:
+                continue
+            if fund_scores[ticker]['warning_count'] < min_warnings:
+                continue
+
         # Filtro de exclusión de sector (ej. Financials, tras analisis de fallos)
         if exclude_sectors is not None:
             if not fund_scores or ticker not in fund_scores:
@@ -518,6 +646,15 @@ def build_signal_map(indicators, var, spy_dict, date_from=None, date_to=None, fu
 
             if var['spy_filter'] and spy_dict:
                 if not spy_dict.get(date_str, True): continue
+
+            # Filtro de régimen sectorial dinámico: el ETF del sector de esta
+            # empresa debe estar por encima de su SMA200 EN LA FECHA de esta
+            # señal concreta (no fija por ticker — el régimen del sector
+            # cambia con el tiempo, así que se evalúa señal a señal).
+            if sector_regime_filter and sector_regime:
+                sector = fund_scores.get(ticker, {}).get('sector', 'Unknown') if fund_scores else 'Unknown'
+                if not sector_esta_alcista(sector, date_str, sector_regime):
+                    continue
 
             r  = ind['rsi'][i]
             d  = ind['dd60'][i]
@@ -1089,23 +1226,37 @@ def run_walkforward(tickers, prices, indicators, spy_dict, fund_scores=None):
     return wf_results
 
 
-def run_variantes(tickers, prices, indicators, spy_dict, rapido=False, fund_scores=None, failures=False):
+def run_variantes(tickers, prices, indicators, spy_dict, rapido=False, fund_scores=None, failures=False, sector_regime=None):
     """Comparativa de variantes (modo original)."""
     all_results = []
     trades_by_variant = {}
     for i, var in enumerate(VARIANTES):
         print(f"\n  [{i+1}/{len(VARIANTES)}] {var['nombre']}: {var['desc']}")
-        smap, n = build_signal_map(indicators, var, spy_dict, fund_scores=fund_scores)
+        smap, n = build_signal_map(indicators, var, spy_dict, fund_scores=fund_scores, sector_regime=sector_regime)
         print(f"        Señales: {n}")
         if not smap:
             print("        Sin señales — saltando")
             continue
+
+        # Estadística descriptiva de las señales del grupo (antes de simular
+        # el resultado) — permite distinguir si una variante gana porque su
+        # filtro en sí es mejor, o porque coincide con capturar señales más
+        # "extremas" (mayor drawdown de entrada, RSI más bajo) que ya se sabe
+        # de otras variantes que rinden mejor por sí solas.
+        all_dd  = [s['dd']  for sigs in smap.values() for s in sigs.values()]
+        all_rsi = [s['rsi'] for sigs in smap.values() for s in sigs.values()]
+        dd_media  = sum(all_dd) / len(all_dd) if all_dd else 0
+        rsi_media = sum(all_rsi) / len(all_rsi) if all_rsi else 0
+        print(f"        Drawdown60 medio de entrada: {dd_media:.1f}%  ·  RSI medio de entrada: {rsi_media:.1f}")
+
         t, eq, cap = simulate_day_by_day(smap, prices, var, fund_scores=fund_scores)
         s = calc_stats(t, eq, cap, var['nombre'])
         if s:
             s['variante']   = var['nombre']
             s['descripcion']= var['desc']
             s['params']     = var
+            s['dd60_medio_entrada']  = round(dd_media, 2)
+            s['rsi_medio_entrada']   = round(rsi_media, 2)
             all_results.append(s)
             trades_by_variant[var['nombre']] = t
             st = s['summary']
@@ -1178,6 +1329,14 @@ def main(rapido=False, walkforward=False, ticker=None, solo=None, failures=False
     print(f"  Descargando SPY...")
     spy_dict = download_spy()
 
+    # Solo se descarga el régimen sectorial si alguna variante seleccionada
+    # realmente lo necesita — evita la descarga extra (11 ETFs) en el resto
+    # de ejecuciones donde no aporta nada.
+    sector_regime = None
+    if any(v.get('sector_regime_filter') for v in VARIANTES):
+        print(f"  Descargando régimen sectorial (ETFs SPDR)...")
+        sector_regime = download_sector_regime()
+
     out = Path(__file__).parent/"data"/"master"
     out.mkdir(parents=True, exist_ok=True)
 
@@ -1187,7 +1346,7 @@ def main(rapido=False, walkforward=False, ticker=None, solo=None, failures=False
             json.dump(wf_results, f, ensure_ascii=False, indent=2, default=str)
         print(f"\n  Guardado: walkforward_results.json")
     else:
-        run_variantes(tickers, prices, indicators, spy_dict, rapido, fund_scores=fund_scores, failures=failures)
+        run_variantes(tickers, prices, indicators, spy_dict, rapido, fund_scores=fund_scores, failures=failures, sector_regime=sector_regime)
 
 
 
@@ -1909,4 +2068,3 @@ if __name__ == '__main__':
         solo_list = [s.strip() for s in args.solo.split(',')] if args.solo else None
         main(rapido=args.rapido, walkforward=args.walkforward, ticker=args.ticker,
              solo=solo_list, failures=args.failures, historical=args.historical)
-
