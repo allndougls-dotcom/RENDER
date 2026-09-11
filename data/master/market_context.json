@@ -1,27 +1,21 @@
 {
-  "date": "2026-09-10 22:42",
-  "spy_price": 762.4,
-  "spy_ma50": 758.02,
-  "spy_ma200": 710.95,
-  "spy_rsi": 43.5,
-  "spy_vs200": 7.24,
-  "spy_dd52": -1.99,
-  "spy_ma200_slope": 1.39,
-  "spy_vol_ratio": 0.68,
-  "vix": 16.46,
-  "market_regime": "ALCISTA FUERTE",
-  "regime_color": "#22c55e",
-  "regime_icon": "🟢",
-  "regime_desc": "Tendencia alcista sana. Condiciones favorables para mean reversion.",
-  "regime_score": 10,
+  "date": "2026-09-11 22:42",
+  "spy_price": 757.83,
+  "spy_ma50": 758.25,
+  "spy_ma200": 711.5,
+  "spy_rsi": 45.1,
+  "spy_vs200": 6.51,
+  "spy_dd52": -2.58,
+  "spy_ma200_slope": 1.392,
+  "spy_vol_ratio": 0.72,
+  "vix": 17.84,
+  "market_regime": "ALCISTA",
+  "regime_color": "#86efac",
+  "regime_icon": "🟩",
+  "regime_desc": "Por encima de MA200. Rebotes técnicos tienen alta probabilidad.",
+  "regime_score": 8,
   "filter_rec": "Filtros estándar (Score ≥6.5, DD ≥10%)",
   "history": [
-    {
-      "date": "2025-09-11",
-      "close": 650.42,
-      "ma200": 587.92,
-      "rsi": 72.6
-    },
     {
       "date": "2025-09-12",
       "close": 650.21,
@@ -1515,6 +1509,12 @@
       "close": 762.4,
       "ma200": 710.95,
       "rsi": 43.5
+    },
+    {
+      "date": "2026-09-10",
+      "close": 757.83,
+      "ma200": 711.5,
+      "rsi": 45.1
     }
   ]
 }
