@@ -69,6 +69,30 @@ WINDOWS = [
     ("W4_2026",   "2026-03-01", "2026-09-10"),
 ]
 
+# Cache structures that are invariant across cost/window scenarios.
+_ORIG_PRICE_INDEXES = exp.price_indexes
+_ORIG_SCHEDULE_ENTRIES = exp.schedule_entries
+_PRICE_CACHE = {}
+_SCHEDULE_CACHE = {}
+
+
+def cached_price_indexes(prices):
+    key = id(prices)
+    if key not in _PRICE_CACHE:
+        _PRICE_CACHE[key] = _ORIG_PRICE_INDEXES(prices)
+    return _PRICE_CACHE[key]
+
+
+def cached_schedule_entries(signal_map, indicators):
+    key = (id(signal_map), id(indicators))
+    if key not in _SCHEDULE_CACHE:
+        _SCHEDULE_CACHE[key] = _ORIG_SCHEDULE_ENTRIES(signal_map, indicators)
+    return _SCHEDULE_CACHE[key]
+
+
+exp.price_indexes = cached_price_indexes
+exp.schedule_entries = cached_schedule_entries
+
 
 def run_sim(signal_map, prices, indicators, fund_scores, experiment, start, end, cost_bps=0):
     """Run exp.simulate while charging round-trip costs on actual position notional."""
@@ -131,20 +155,18 @@ def main():
     print(f"Signals in full period: {nsignals}\n")
 
     cost_rows = []
-    cost_details = {}
     print("COST SENSITIVITY — FULL PERIOD")
     print("-" * 100)
     for bps in COST_BPS:
-        st, trades = run_sim(
+        st, _ = run_sim(
             signal_map, prices, indicators, fund_scores,
             CANDIDATE, FULL_START, FULL_END, cost_bps=bps,
         )
         cost_rows.append(st)
-        cost_details[str(bps)] = trades
         print(
             f"{bps:>2} bps RT | WR={st['win_rate']:>6.2f}% PF={st['profit_factor']:>5.2f} "
             f"Ret={st['total_return']:>8.2f}% CAGR={st['cagr']:>6.2f}% "
-            f"MDD={st['max_drawdown_mtm']:>7.2f}% Trades={st['trades']:>4} Avg={st['avg_trade_pct']:>6.3f}%"
+            f"MDD={st['max_drawdown_mtm']:>7.2f}% Trades={st['trades']:>4} AvgGross={st['avg_trade_pct']:>6.3f}%"
         )
 
     print("\nTEMPORAL HOLDOUTS — ZERO COST AND 10 BPS ROUND TRIP")
