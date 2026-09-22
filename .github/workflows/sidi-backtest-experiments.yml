@@ -6,6 +6,7 @@ on:
       - sidi-backtest-improvements
     paths:
       - 'backtest_experiments.py'
+      - 'backtest_experiments_fast.py'
       - '.github/workflows/sidi-backtest-experiments.yml'
       - 'backtest.py'
       - 'requirements.txt'
@@ -33,7 +34,7 @@ jobs:
 
       - name: Run SIDI experiments
         run: |
-          python backtest_experiments.py
+          python backtest_experiments_fast.py
 
       - name: Upload experiment results
         if: always()
