@@ -1,0 +1,48 @@
+name: SIDI Candidate Validation
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'validate_sidi_candidate.py'
+      - '.github/workflows/sidi-candidate-validation.yml'
+      - 'backtest_experiments.py'
+      - 'backtest.py'
+      - 'requirements.txt'
+      - 'data/master/**'
+  workflow_dispatch:
+
+jobs:
+  validate-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate frozen SIDI candidate
+        run: |
+          python validate_sidi_candidate.py
+
+      - name: Upload validation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-candidate-validation-results
+          path: |
+            sidi_candidate_cost_sensitivity.csv
+            sidi_candidate_temporal_validation.csv
+            sidi_candidate_validation.json
+          if-no-files-found: warn
