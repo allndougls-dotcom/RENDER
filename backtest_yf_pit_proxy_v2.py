@@ -3,7 +3,8 @@
 Builds on backtest_yf_pit_proxy.py but adds:
 1) one-sided historical S&P membership correction using `date_added`;
 2) sector medians computed only from current constituents that had already joined;
-3) calibration of reconstructed scores against a real archived SIDI snapshot.
+3) calibration of reconstructed scores against a real archived SIDI snapshot;
+4) cached annual fundamental states for fast repeated historical scoring.
 
 Still not PIT_TRUE because removed historical constituents are absent and
 historical yFinance statements may contain later restatements.
@@ -14,14 +15,13 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 import backtest as bt
 import backtest_experiments as exp
 import backtest_yf_pit_proxy as base
 import historical_membership as membership
-import validate_sidi_candidate as val
+import pit_proxy_fast as fast
 from modules.ingesta.scoring import _sector_medians, _fund_score
 
 START = base.START
@@ -36,16 +36,18 @@ def active_tickers(asof: str, tickers: list[str], added: dict[str, str | None]) 
     return [t for t in tickers if added.get(t) is None or asof >= added[t]]
 
 
-def dynamic_scores_membership(signal_dates, tickers, sectors, statement_cache, prices_by_date, added):
+def dynamic_scores_membership(signal_dates, tickers, sectors, state_cache, prices_by_date, added):
     score_by_date = {}
     coverage_rows = []
     n = len(signal_dates)
     for i, asof in enumerate(signal_dates, 1):
         active = active_tickers(asof, tickers, added)
-        rows = [
-            base.metrics_from_cache(t, sectors.get(t, "Unknown"), asof, statement_cache, prices_by_date)
-            for t in active
-        ]
+        rows = []
+        for ticker in active:
+            price = base.close_on_or_before(prices_by_date.get(ticker, {}), asof)
+            rows.append(
+                fast.row_asof(state_cache, ticker, sectors.get(ticker, "Unknown"), asof, price)
+            )
         df = pd.DataFrame(rows)
         sm = _sector_medians(df)
         scores = df.apply(lambda r: _fund_score(r, sm), axis=1)
@@ -136,8 +138,11 @@ def main():
 
     statement_cache, failed = base.fetch_statement_cache(tickers)
     print(f"Statement cache {len(statement_cache)}/{len(tickers)}; failed={len(failed)}")
+    state_cache = fast.build_state_cache(statement_cache, START, END, base.LAG_DAYS)
+    print(f"Annual PIT state cache built: {len(state_cache)} tickers")
+
     score_by_date, coverage = dynamic_scores_membership(
-        scoring_dates, tickers, sectors, statement_cache, prices_by_date, added
+        scoring_dates, tickers, sectors, state_cache, prices_by_date, added
     )
     coverage.to_csv("sidi_yf_pit_proxy_v2_coverage.csv", index=False)
 
@@ -172,10 +177,20 @@ def main():
     )
     Path("sidi_yf_pit_proxy_v2_results.json").write_text(json.dumps({
         "generated_at": datetime.utcnow().isoformat() + "Z",
+        "method": {
+            "fundamental_label": "PIT_PROXY",
+            "publication_lag_days": base.LAG_DAYS,
+            "round_trip_cost_bps": COST_BPS,
+            "membership_filter": "exclude current constituents before date_added",
+            "remaining_biases": [
+                "historical yFinance statements may include later restatements",
+                "removed historical S&P members are absent from current universe",
+                "90-day lag approximates actual filing dates",
+            ],
+        },
         "membership": {
             "technical": member_stats,
             "current_proxy": current_member_stats,
-            "limitation": "current members before date_added excluded; removed historical members still absent",
         },
         "calibration": calibration,
         "failed_statement_tickers": failed,
