@@ -1,0 +1,39 @@
+name: SIDI SEC PIT Smoke Test
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'sec_pit_fundamentals.py'
+      - '.github/workflows/sidi-sec-pit-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Reconstruct PIT fundamentals at 2025-06-30
+        run: |
+          python sec_pit_fundamentals.py --asof 2025-06-30 --tickers AAPL,MSFT,NVDA,JPM,XOM,JNJ,PG,CAT --out sec_pit_20250630.csv
+      - name: Reconstruct PIT fundamentals at 2024-12-31
+        run: |
+          python sec_pit_fundamentals.py --asof 2024-12-31 --tickers AAPL,MSFT,NVDA,JPM,XOM,JNJ,PG,CAT --out sec_pit_20241231.csv
+      - name: Upload smoke outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-sec-pit-smoke
+          path: |
+            sec_pit_20250630.csv
+            sec_pit_20241231.csv
