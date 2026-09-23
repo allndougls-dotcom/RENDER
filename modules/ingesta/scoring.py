@@ -24,12 +24,17 @@ if _THIS_DIR not in sys.path:
 try:
     from sector_context import get_sector_context
 except ImportError as e:
-    # Fallback si sector_context.py de verdad no está disponible (archivo
-    # ausente, no solo un problema de path). Se avisa por consola para que
-    # el fallo sea visible en vez de silencioso.
     print(f"  ⚠ No se pudo importar sector_context.py ({e}) — sector_context quedará vacío en el CSV")
     def get_sector_context(ticker, sector):
         return {"sector_etf": None, "subsector": None, "peer_group": [], "critical_macro_variables": []}
+
+# Plan operativo candidato. En esta rama experimental NO decide qué empresa
+# es setup; sólo añade campos explícitos de ejecución al export.
+try:
+    from sidi_trade_plan import add_indicative_trade_plan
+except ImportError:
+    def add_indicative_trade_plan(df):
+        return df
 
 SCORE_COLS = ["revenue_growth", "eps_growth", "roe", "debt_equity",
               "pe", "pb", "current_ratio"]
@@ -63,8 +68,8 @@ def _fund_score(row: pd.Series, sm: dict) -> pd.Series:
     g = _norm(rev_g, med_rev) * 0.5 + _norm(eps_g, med_eps) * 0.5
 
     # SOLIDEZ (35%)
-    roe  = row.get("roe",           np.nan)  # decimal
-    de   = row.get("debt_equity",   np.nan)  # normal
+    roe  = row.get("roe",           np.nan)
+    de   = row.get("debt_equity",   np.nan)
     cr   = row.get("current_ratio", np.nan)
     fcni = row.get("fcf_ni_ratio",  np.nan)
 
@@ -150,23 +155,16 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame,
         df.get("tech_score", pd.Series(5.0, index=df.index)).fillna(5) * 0.40
     ).round(2)
 
-    # ── Parámetros validados por backtest (2 años, 503 tickers) + walk-forward ──
-    # DD>=10% (no 12%) + fund_score>=6.5 + excluir Financials/Comm.Services
-    # mejora WR 55.3%→58.4%, PF 1.42x→1.61x, Retorno +138.6%→+219.1%, MDD -23.6%→-19.6%
-    SECTORES_EXCLUIDOS = ["Financials", "Communication Services"]
-
-    if all(c in df.columns for c in ["fund_score", "drawdown_60d", "setup_hot", "sector"]):
+    # ── CANDIDATA EXPERIMENTAL SIDI ───────────────────────────────────────
+    # Backtests corregidos T+1 + costes + validación temporal + PIT proxy:
+    # fund_score>=6.5, DD60>=12%, RSI<40, MACD mejorando y volumen decreciente.
+    # `setup_hot` ya contiene RSI/MACD/volumen; aquí endurecemos DD a 12%.
+    # Se elimina la exclusión sectorial fija: no está presente en la candidata
+    # validada. Esto vive sólo en la rama experimental hasta aprobación.
+    if all(c in df.columns for c in ["fund_score", "drawdown_60d", "setup_hot"]):
         df["full_setup"] = (
             (df["fund_score"]   >= 6.5) &
-            (df["drawdown_60d"] <= -10) &
-            (df["setup_hot"]    == True) &
-            (~df["sector"].isin(SECTORES_EXCLUIDOS))
-        )
-    elif all(c in df.columns for c in ["fund_score", "drawdown_60d", "setup_hot"]):
-        # Fallback sin columna 'sector' disponible — solo filtros de score/drawdown
-        df["full_setup"] = (
-            (df["fund_score"]   >= 6.5) &
-            (df["drawdown_60d"] <= -10) &
+            (df["drawdown_60d"] <= -12) &
             (df["setup_hot"]    == True)
         )
     else:
@@ -174,6 +172,8 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame,
 
     def horizon(row):
         if pd.isna(row.get("rsi_14")): return "N/A"
+        if bool(row.get("full_setup", False)):
+            return "SIDI: max 7 sesiones"
         if row["rsi_14"] < 30 and row.get("near_support") and row.get("macd_improving"): return "5-10d"
         bias = row.get("trend_bias", "")
         return "10-18d" if bias == "ALCISTA" else ("3-7d" if bias == "BAJISTA" else "7-15d")
@@ -192,6 +192,10 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame,
 
     sector_ctx_df = df.apply(_sector_ctx, axis=1)
     df = pd.concat([df, sector_ctx_df], axis=1)
+
+    # Añade plan indicativo desde el cierre T. El TP/SL ejecutable exacto se fija
+    # cuando se conoce el Open T+1, tal como hace el backtest.
+    df = add_indicative_trade_plan(df)
 
     df = df.sort_values("combined_score", ascending=False).reset_index(drop=True)
 
