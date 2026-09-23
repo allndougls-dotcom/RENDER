@@ -7,7 +7,10 @@ then use SEC itself as the authoritative source for all financial facts.
 """
 from __future__ import annotations
 
+from io import StringIO
+
 import pandas as pd
+import requests
 
 import sec_pit_fundamentals as pit
 
@@ -20,7 +23,15 @@ def robust_cik_map(session=None):
         return _ORIGINAL_CIK_MAP(session)
     except Exception as exc:
         print(f"SEC ticker map unavailable ({type(exc).__name__}); using S&P 500 CIK table fallback")
-        tables = pd.read_html(WIKI_SP500)
+        r = requests.get(
+            WIKI_SP500,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; SIDI research backtest; +https://github.com/allndougls-dotcom/RENDER)"
+            },
+            timeout=30,
+        )
+        r.raise_for_status()
+        tables = pd.read_html(StringIO(r.text))
         df = tables[0]
         out = {}
         for row in df.itertuples(index=False):
