@@ -7,6 +7,7 @@ on:
     paths:
       - 'pit_proxy_ttm.py'
       - 'calibrate_pit_proxy_ttm.py'
+      - 'calibrate_pit_proxy_ttm_v2.py'
       - '.github/workflows/sidi-pit-ttm-calibration.yml'
 
 jobs:
@@ -26,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Run quarterly TTM calibration
-        run: python calibrate_pit_proxy_ttm.py
+        run: python calibrate_pit_proxy_ttm_v2.py
       - name: Upload calibration
         if: always()
         uses: actions/upload-artifact@v4
