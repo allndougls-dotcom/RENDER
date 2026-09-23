@@ -3,8 +3,7 @@
 Builds on backtest_yf_pit_proxy.py but adds:
 1) one-sided historical S&P membership correction using `date_added`;
 2) sector medians computed only from current constituents that had already joined;
-3) calibration of reconstructed scores against a real archived SIDI snapshot;
-4) cached annual fundamental states for fast repeated historical scoring.
+3) calibration of reconstructed scores against a real archived SIDI snapshot.
 
 Still not PIT_TRUE because removed historical constituents are absent and
 historical yFinance statements may contain later restatements.
@@ -12,18 +11,18 @@ historical yFinance statements may contain later restatements.
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-import yfinance as yf
 
 import backtest as bt
 import backtest_experiments as exp
 import backtest_yf_pit_proxy as base
+import backtest_yf_pit_proxy_fast as fast
 import historical_membership as membership
-import pit_proxy_fast as fast
+import validate_sidi_candidate as val
 from modules.ingesta.scoring import _sector_medians, _fund_score
 
 START = base.START
@@ -36,42 +35,6 @@ CALIBRATION_DATE = "2026-09-09"
 
 def active_tickers(asof: str, tickers: list[str], added: dict[str, str | None]) -> list[str]:
     return [t for t in tickers if added.get(t) is None or asof >= added[t]]
-
-
-def fetch_statement_cache_parallel(tickers: list[str], workers: int = 4):
-    """Fetch annual statements concurrently, then retry misses sequentially."""
-    cache = {}
-    failed = []
-
-    def one(ticker: str):
-        t = yf.Ticker(ticker.replace("-", "."))
-        inc = t.income_stmt
-        bal = t.balance_sheet
-        cf = t.cashflow
-        if (inc is None or inc.empty) and (bal is None or bal.empty):
-            raise ValueError("empty statements")
-        return ticker, {"inc": inc, "bal": bal, "cf": cf}
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(one, ticker): ticker for ticker in tickers}
-        done = 0
-        for fut in as_completed(futures):
-            ticker = futures[fut]
-            done += 1
-            try:
-                t, data = fut.result()
-                cache[t] = data
-            except Exception:
-                failed.append(ticker)
-            if done % 50 == 0 or done == len(tickers):
-                print(f"  Parallel statements {done}/{len(tickers)}: OK={len(cache)} pending-retry={len(failed)}")
-
-    if failed:
-        print(f"  Retrying {len(failed)} statement failures sequentially...")
-        retry_cache, retry_failed = base.fetch_statement_cache(sorted(set(failed)))
-        cache.update(retry_cache)
-        failed = retry_failed
-    return cache, failed
 
 
 def dynamic_scores_membership(signal_dates, tickers, sectors, state_cache, prices_by_date, added):
@@ -128,7 +91,7 @@ def calibrate(score_by_date: dict, date: str, threshold: float = 6.5) -> dict:
     tp = int((comp.real_pass & comp.proxy_pass).sum())
     fp = int((~comp.real_pass & comp.proxy_pass).sum())
     fn = int((comp.real_pass & ~comp.proxy_pass).sum())
-    # Spearman without scipy: Pearson correlation of the two rank vectors.
+    # Spearman without scipy: Pearson correlation of ranked values.
     real_rank = comp["real_score"].rank(method="average")
     proxy_rank = comp["proxy_score"].rank(method="average")
     return {
@@ -177,11 +140,10 @@ def main():
     signal_dates = sorted({d for sigs in tech_map.values() for d in sigs})
     scoring_dates = sorted(set(signal_dates) | {CALIBRATION_DATE})
 
-    statement_cache, failed = fetch_statement_cache_parallel(tickers, workers=4)
+    statement_cache, failed = base.fetch_statement_cache(tickers)
     print(f"Statement cache {len(statement_cache)}/{len(tickers)}; failed={len(failed)}")
-    state_cache = fast.build_state_cache(statement_cache, START, END, base.LAG_DAYS)
+    state_cache = fast.build_annual_state_cache(statement_cache)
     print(f"Annual PIT state cache built: {len(state_cache)} tickers")
-
     score_by_date, coverage = dynamic_scores_membership(
         scoring_dates, tickers, sectors, state_cache, prices_by_date, added
     )
@@ -209,35 +171,19 @@ def main():
             f"MDD={st['max_drawdown_mtm']:7.2f}% Days={st['avg_days']:4.2f}"
         )
 
-    # Persist the core backtest before optional calibration so a calibration issue
-    # can never discard the expensive trading result.
-    pd.DataFrame(summaries).drop(columns=["config"], errors="ignore").to_csv(
-        "sidi_yf_pit_proxy_v2_summary.csv", index=False
-    )
-
-    try:
-        calibration = calibrate(score_by_date, CALIBRATION_DATE, MIN_SCORE)
-    except Exception as exc:
-        calibration = {"date": CALIBRATION_DATE, "available": False, "error": f"{type(exc).__name__}: {exc}"}
+    calibration = calibrate(score_by_date, CALIBRATION_DATE, MIN_SCORE)
     print("\nCALIBRATION VS REAL ARCHIVED SIDI SCORE")
     print(json.dumps(calibration, indent=2))
 
+    pd.DataFrame(summaries).drop(columns=["config"], errors="ignore").to_csv(
+        "sidi_yf_pit_proxy_v2_summary.csv", index=False
+    )
     Path("sidi_yf_pit_proxy_v2_results.json").write_text(json.dumps({
         "generated_at": datetime.utcnow().isoformat() + "Z",
-        "method": {
-            "fundamental_label": "PIT_PROXY",
-            "publication_lag_days": base.LAG_DAYS,
-            "round_trip_cost_bps": COST_BPS,
-            "membership_filter": "exclude current constituents before date_added",
-            "remaining_biases": [
-                "historical yFinance statements may include later restatements",
-                "removed historical S&P members are absent from current universe",
-                "90-day lag approximates actual filing dates",
-            ],
-        },
         "membership": {
             "technical": member_stats,
             "current_proxy": current_member_stats,
+            "limitation": "current members before date_added excluded; removed historical members still absent",
         },
         "calibration": calibration,
         "failed_statement_tickers": failed,
