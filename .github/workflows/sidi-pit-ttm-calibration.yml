@@ -1,0 +1,42 @@
+name: SIDI PIT TTM Calibration
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'pit_proxy_ttm.py'
+      - 'calibrate_pit_proxy_ttm.py'
+      - '.github/workflows/sidi-pit-ttm-calibration.yml'
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run quarterly TTM calibration
+        run: python calibrate_pit_proxy_ttm.py
+      - name: Upload calibration
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-pit-ttm-calibration
+          path: |
+            sidi_pit_ttm_calibration_summary.json
+            sidi_pit_ttm_calibration_by_date.csv
+            sidi_pit_ttm_calibration_coverage.csv
+            sidi_pit_ttm_calibration_by_metric.csv
+            sidi_pit_ttm_calibration_loso.csv
+            sidi_pit_ttm_calibration_ticker_mismatches.csv
+          if-no-files-found: warn
