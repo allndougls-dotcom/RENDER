@@ -1,0 +1,39 @@
+name: SIDI Fundamental Dependency
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'validate_fundamental_dependency.py'
+      - '.github/workflows/sidi-fundamental-dependency.yml'
+      - 'backtest_experiments.py'
+      - 'validate_sidi_candidate.py'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run fundamental dependency test
+        run: python validate_fundamental_dependency.py
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-fundamental-dependency
+          path: sidi_fundamental_dependency.csv
