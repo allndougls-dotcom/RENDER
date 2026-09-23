@@ -12,10 +12,12 @@ historical yFinance statements may contain later restatements.
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import yfinance as yf
 
 import backtest as bt
 import backtest_experiments as exp
@@ -34,6 +36,42 @@ CALIBRATION_DATE = "2026-09-09"
 
 def active_tickers(asof: str, tickers: list[str], added: dict[str, str | None]) -> list[str]:
     return [t for t in tickers if added.get(t) is None or asof >= added[t]]
+
+
+def fetch_statement_cache_parallel(tickers: list[str], workers: int = 4):
+    """Fetch annual statements concurrently, then retry misses sequentially."""
+    cache = {}
+    failed = []
+
+    def one(ticker: str):
+        t = yf.Ticker(ticker.replace("-", "."))
+        inc = t.income_stmt
+        bal = t.balance_sheet
+        cf = t.cashflow
+        if (inc is None or inc.empty) and (bal is None or bal.empty):
+            raise ValueError("empty statements")
+        return ticker, {"inc": inc, "bal": bal, "cf": cf}
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(one, ticker): ticker for ticker in tickers}
+        done = 0
+        for fut in as_completed(futures):
+            ticker = futures[fut]
+            done += 1
+            try:
+                t, data = fut.result()
+                cache[t] = data
+            except Exception:
+                failed.append(ticker)
+            if done % 50 == 0 or done == len(tickers):
+                print(f"  Parallel statements {done}/{len(tickers)}: OK={len(cache)} pending-retry={len(failed)}")
+
+    if failed:
+        print(f"  Retrying {len(failed)} statement failures sequentially...")
+        retry_cache, retry_failed = base.fetch_statement_cache(sorted(set(failed)))
+        cache.update(retry_cache)
+        failed = retry_failed
+    return cache, failed
 
 
 def dynamic_scores_membership(signal_dates, tickers, sectors, state_cache, prices_by_date, added):
@@ -90,12 +128,15 @@ def calibrate(score_by_date: dict, date: str, threshold: float = 6.5) -> dict:
     tp = int((comp.real_pass & comp.proxy_pass).sum())
     fp = int((~comp.real_pass & comp.proxy_pass).sum())
     fn = int((comp.real_pass & ~comp.proxy_pass).sum())
+    # Spearman without scipy: Pearson correlation of the two rank vectors.
+    real_rank = comp["real_score"].rank(method="average")
+    proxy_rank = comp["proxy_score"].rank(method="average")
     return {
         "date": date,
         "available": True,
         "n": int(len(comp)),
         "pearson": float(comp.real_score.corr(comp.proxy_score, method="pearson")),
-        "spearman": float(comp.real_score.corr(comp.proxy_score, method="spearman")),
+        "spearman": float(real_rank.corr(proxy_rank, method="pearson")),
         "mae": float((comp.proxy_score - comp.real_score).abs().mean()),
         "classification_agreement": float((comp.real_pass == comp.proxy_pass).mean()),
         "real_pass": int(comp.real_pass.sum()),
@@ -136,7 +177,7 @@ def main():
     signal_dates = sorted({d for sigs in tech_map.values() for d in sigs})
     scoring_dates = sorted(set(signal_dates) | {CALIBRATION_DATE})
 
-    statement_cache, failed = base.fetch_statement_cache(tickers)
+    statement_cache, failed = fetch_statement_cache_parallel(tickers, workers=4)
     print(f"Statement cache {len(statement_cache)}/{len(tickers)}; failed={len(failed)}")
     state_cache = fast.build_state_cache(statement_cache, START, END, base.LAG_DAYS)
     print(f"Annual PIT state cache built: {len(state_cache)} tickers")
@@ -168,13 +209,19 @@ def main():
             f"MDD={st['max_drawdown_mtm']:7.2f}% Days={st['avg_days']:4.2f}"
         )
 
-    calibration = calibrate(score_by_date, CALIBRATION_DATE, MIN_SCORE)
-    print("\nCALIBRATION VS REAL ARCHIVED SIDI SCORE")
-    print(json.dumps(calibration, indent=2))
-
+    # Persist the core backtest before optional calibration so a calibration issue
+    # can never discard the expensive trading result.
     pd.DataFrame(summaries).drop(columns=["config"], errors="ignore").to_csv(
         "sidi_yf_pit_proxy_v2_summary.csv", index=False
     )
+
+    try:
+        calibration = calibrate(score_by_date, CALIBRATION_DATE, MIN_SCORE)
+    except Exception as exc:
+        calibration = {"date": CALIBRATION_DATE, "available": False, "error": f"{type(exc).__name__}: {exc}"}
+    print("\nCALIBRATION VS REAL ARCHIVED SIDI SCORE")
+    print(json.dumps(calibration, indent=2))
+
     Path("sidi_yf_pit_proxy_v2_results.json").write_text(json.dumps({
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "method": {
