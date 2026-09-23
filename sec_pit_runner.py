@@ -12,11 +12,12 @@ import pandas as pd
 import sec_pit_fundamentals as pit
 
 WIKI_SP500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+_ORIGINAL_CIK_MAP = pit.ticker_cik_map
 
 
 def robust_cik_map(session=None):
     try:
-        return pit.ticker_cik_map(session)
+        return _ORIGINAL_CIK_MAP(session)
     except Exception as exc:
         print(f"SEC ticker map unavailable ({type(exc).__name__}); using S&P 500 CIK table fallback")
         tables = pd.read_html(WIKI_SP500)
