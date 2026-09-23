@@ -6,8 +6,6 @@ the current-score look-ahead cannot be the sole source of the observed edge.
 """
 from __future__ import annotations
 
-from dataclasses import replace
-from pathlib import Path
 import pandas as pd
 
 import backtest as bt
@@ -44,11 +42,11 @@ def main() -> None:
             time_stop=7,
             description=f"DD12 + min current-proxy fund_score {threshold:g}",
         )
-        trades, equity, final_cap, ambiguous, same_day = val.run_sim(
+        st, trades = val.run_sim(
             signal_map, prices, indicators, fund_scores, experiment,
             START, END, cost_bps=COST_BPS,
         )
-        st = exp.stats_for(experiment, trades, equity, final_cap, n, ambiguous, same_day)
+        st["signal_count_from_builder"] = int(n)
         rows.append(st)
         print(
             f"fund>={threshold:g}: signals={n:5d} trades={st['trades']:4d} "
