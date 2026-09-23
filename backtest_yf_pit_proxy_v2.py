@@ -20,7 +20,7 @@ import pandas as pd
 import backtest as bt
 import backtest_experiments as exp
 import backtest_yf_pit_proxy as base
-import backtest_yf_pit_proxy_fast as fast
+import pit_proxy_fast as fast
 import historical_membership as membership
 import validate_sidi_candidate as val
 from modules.ingesta.scoring import _sector_medians, _fund_score
@@ -91,7 +91,6 @@ def calibrate(score_by_date: dict, date: str, threshold: float = 6.5) -> dict:
     tp = int((comp.real_pass & comp.proxy_pass).sum())
     fp = int((~comp.real_pass & comp.proxy_pass).sum())
     fn = int((comp.real_pass & ~comp.proxy_pass).sum())
-    # Spearman without scipy: Pearson correlation of ranked values.
     real_rank = comp["real_score"].rank(method="average")
     proxy_rank = comp["proxy_score"].rank(method="average")
     return {
