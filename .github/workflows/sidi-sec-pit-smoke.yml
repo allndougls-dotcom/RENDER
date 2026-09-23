@@ -6,6 +6,7 @@ on:
       - sidi-backtest-improvements
     paths:
       - 'sec_pit_fundamentals.py'
+      - 'sec_pit_runner.py'
       - '.github/workflows/sidi-sec-pit-smoke.yml'
 
 jobs:
@@ -26,10 +27,10 @@ jobs:
           pip install -r requirements.txt
       - name: Reconstruct PIT fundamentals at 2025-06-30
         run: |
-          python sec_pit_fundamentals.py --asof 2025-06-30 --tickers AAPL,MSFT,NVDA,JPM,XOM,JNJ,PG,CAT --out sec_pit_20250630.csv
+          python sec_pit_runner.py --asof 2025-06-30 --tickers AAPL,MSFT,NVDA,JPM,XOM,JNJ,PG,CAT --out sec_pit_20250630.csv
       - name: Reconstruct PIT fundamentals at 2024-12-31
         run: |
-          python sec_pit_fundamentals.py --asof 2024-12-31 --tickers AAPL,MSFT,NVDA,JPM,XOM,JNJ,PG,CAT --out sec_pit_20241231.csv
+          python sec_pit_runner.py --asof 2024-12-31 --tickers AAPL,MSFT,NVDA,JPM,XOM,JNJ,PG,CAT --out sec_pit_20241231.csv
       - name: Upload smoke outputs
         uses: actions/upload-artifact@v4
         with:
