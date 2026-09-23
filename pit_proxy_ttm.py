@@ -84,8 +84,6 @@ def _same_quarter_year_ago(df: pd.DataFrame, candidates: list[str], latest_col: 
     for c in candidates_cols:
         if c >= latest_col:
             continue
-        # Fiscal calendars can shift by a few days/weeks; accept closest period
-        # around one year ago, but never an adjacent quarter.
         delta = abs((c - target).days)
         if delta <= 55:
             viable.append((delta, c))
@@ -118,7 +116,6 @@ def _fcf_ttm(qcf: pd.DataFrame, asof: str, lag_days: int):
     ocf, ocf_cols = _ttm_sum(qcf, ["Operating Cash Flow", "Total Cash From Operating Activities"], asof, lag_days)
     capex, capex_cols = _ttm_sum(qcf, ["Capital Expenditure", "Capital Expenditures"], asof, lag_days)
     if pd.notna(ocf) and pd.notna(capex):
-        # yFinance typically reports capex as negative cash outflow.
         return float(ocf + capex if capex < 0 else ocf - capex), ocf_cols
     return np.nan, ocf_cols or capex_cols
 
@@ -150,7 +147,6 @@ def metrics_asof(statements: dict, asof: str, price: float,
     debt, _ = _latest(qbal, ["Total Debt", "Total Debt And Capital Lease Obligation", "Long Term Debt And Capital Lease Obligation"], asof, quarter_lag)
     shares, _ = _latest(qbal, ["Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding"], asof, quarter_lag)
 
-    # Conservative annual fallbacks when quarterly history is incomplete.
     if pd.isna(revenue_growth):
         rv, rp, _ = annual._latest_two(ainc, ["Total Revenue", "Operating Revenue", "Revenue"], asof)
         revenue_growth = (rv-rp)/abs(rp) if pd.notna(rv) and pd.notna(rp) and rp != 0 else np.nan
@@ -201,4 +197,8 @@ def metrics_asof(statements: dict, asof: str, price: float,
         "prior_growth_quarter": rev_prior_q.date().isoformat() if rev_prior_q is not None else None,
         "eps_growth_quarter": eps_q.date().isoformat() if eps_q is not None else None,
         "balance_quarter": bal_q.date().isoformat() if bal_q is not None else None,
+        "shares": shares,
+        "equity": equity,
+        "eps_ttm": eps_ttm,
+        "net_income_ttm": ni_ttm,
     }
