@@ -1,27 +1,21 @@
 {
-  "date": "2026-09-22 23:07",
-  "spy_price": 773.5,
-  "spy_ma50": 758.3,
-  "spy_ma200": 712.98,
-  "spy_rsi": 56.0,
-  "spy_vs200": 8.49,
-  "spy_dd52": -0.32,
-  "spy_ma200_slope": 1.386,
-  "spy_vol_ratio": 0.91,
+  "date": "2026-09-23 09:29",
+  "spy_price": NaN,
+  "spy_ma50": NaN,
+  "spy_ma200": NaN,
+  "spy_rsi": NaN,
+  "spy_vs200": NaN,
+  "spy_dd52": NaN,
+  "spy_ma200_slope": NaN,
+  "spy_vol_ratio": 1.0,
   "vix": 14.87,
-  "market_regime": "ALCISTA FUERTE",
-  "regime_color": "#22c55e",
-  "regime_icon": "🟢",
-  "regime_desc": "Tendencia alcista sana. Condiciones favorables para mean reversion.",
-  "regime_score": 10,
-  "filter_rec": "Filtros estándar (Score ≥6.5, DD ≥10%)",
+  "market_regime": "BAJISTA",
+  "regime_color": "#ef4444",
+  "regime_icon": "🔴",
+  "regime_desc": "Tendencia bajista. Rebotes son traps. Considera no operar hasta recuperar MA200.",
+  "regime_score": 1,
+  "filter_rec": "No operar o solo posiciones muy pequeñas",
   "history": [
-    {
-      "date": "2025-09-23",
-      "close": 656.13,
-      "ma200": 589.16,
-      "rsi": 79.4
-    },
     {
       "date": "2025-09-24",
       "close": 654.04,
@@ -1515,6 +1509,12 @@
       "close": 773.5,
       "ma200": 712.98,
       "rsi": 56.0
+    },
+    {
+      "date": "2026-09-22",
+      "close": NaN,
+      "ma200": null,
+      "rsi": null
     }
   ]
 }
