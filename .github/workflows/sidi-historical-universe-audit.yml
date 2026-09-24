@@ -1,0 +1,41 @@
+name: SIDI Historical Universe Audit
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'audit_historical_sp500_universe.py'
+      - '.github/workflows/sidi-historical-universe-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Audit historical S&P 500 universe
+        run: python audit_historical_sp500_universe.py
+      - name: Upload historical universe audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-historical-universe-audit
+          path: |
+            sidi_sp500_membership_intervals_2020_2024.csv
+            sidi_sp500_membership_events_2020_2024.csv
+            sidi_sp500_removed_constituents_2020_2024.csv
+            sidi_sp500_membership_annual_audit.csv
+            sidi_sp500_historical_universe_audit.json
+          if-no-files-found: warn
