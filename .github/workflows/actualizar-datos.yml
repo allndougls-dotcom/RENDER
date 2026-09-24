@@ -67,31 +67,32 @@ jobs:
           YEARS_HISTORY: "2"
           PYTHONUNBUFFERED: "1"
         run: python main_ingesta.py
+      - name: Guardar snapshot fundamental point-in-time
+        if: steps.horario.outputs.should_run == 'true'
+        run: python snapshot_fundamentals.py
       - name: Comprobar resultado
         if: steps.horario.outputs.should_run == 'true'
         run: |
           test -n "$(find data/master -maxdepth 1 -name 'sp500_full_export_*.csv' -print -quit)"
           test -f data/master/market_context.json
+          test -n "$(find data/history/fundamentals -maxdepth 1 -name 'fundamentals_*.csv' -print -quit)"
           ls -lh data/master
+          ls -lh data/history/fundamentals | tail
       - name: Publicar datos actualizados
         if: steps.horario.outputs.should_run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f data/master/sp500_full_export_*.csv data/master/market_context.json
+          git add -f data/history/fundamentals/fundamentals_*.csv
           git add -u data/master
           if git diff --cached --quiet; then
             echo "Los datos no han cambiado; no se crea ningún commit."
             exit 0
           fi
 
-          git commit -m "data: actualizar STOCK-RADAR [skip actions]"
+          git commit -m "data: actualizar STOCK-RADAR y snapshot PIT [skip actions]"
 
-          # El checkout se hizo al INICIO del job (hace ~13 min con la ingesta
-          # completa de por medio) — si alguien más subió commits a main
-          # mientras tanto, el push directo se rechaza ("fetch first").
-          # Sincronizamos con el remoto antes de empujar, con reintentos
-          # por si hay una carrera entre varias ejecuciones casi simultáneas.
           MAX_INTENTOS=5
           intento=1
           until git push; do
@@ -100,17 +101,13 @@ jobs:
               exit 1
             fi
             echo "Push rechazado (intento $intento/$MAX_INTENTOS) — sincronizando con el remoto y reintentando..."
-            # --rebase: reaplica nuestro commit de datos ENCIMA de lo que haya
-            # nuevo en main, en vez de crear un merge commit. Como este job
-            # solo toca data/master/, no debería haber conflictos reales salvo
-            # que alguien edite esos mismos archivos a mano en paralelo.
             if ! git pull --rebase origin main; then
               echo "::error::git pull --rebase falló — puede haber un conflicto real que requiere revisión manual."
               git rebase --abort || true
               exit 1
             fi
             intento=$((intento + 1))
-            sleep $((RANDOM % 10 + 5))  # pequeña espera aleatoria para desincronizar reintentos concurrentes
+            sleep $((RANDOM % 10 + 5))
           done
 
-          echo "✅ Datos publicados correctamente en main."
+          echo "✅ Datos y snapshot PIT publicados correctamente."

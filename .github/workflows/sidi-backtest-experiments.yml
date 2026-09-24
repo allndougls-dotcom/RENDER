@@ -1,0 +1,47 @@
+name: SIDI Backtest Experiments
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'backtest_experiments.py'
+      - 'backtest_experiments_fast.py'
+      - '.github/workflows/sidi-backtest-experiments.yml'
+      - 'backtest.py'
+      - 'requirements.txt'
+      - 'data/master/**'
+  workflow_dispatch:
+
+jobs:
+  run-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run SIDI experiments
+        run: |
+          python backtest_experiments_fast.py
+
+      - name: Upload experiment results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-backtest-experiment-results
+          path: |
+            sidi_experiment_results.json
+            sidi_experiment_summary.csv
+          if-no-files-found: warn

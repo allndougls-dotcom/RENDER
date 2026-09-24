@@ -1,0 +1,40 @@
+name: SIDI yFinance PIT Proxy v2
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'backtest_yf_pit_proxy_v2.py'
+      - 'pit_proxy_fast.py'
+      - 'historical_membership.py'
+      - '.github/workflows/sidi-yf-pit-proxy-v2.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout full branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run PIT proxy v2
+        run: python backtest_yf_pit_proxy_v2.py
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-yf-pit-proxy-v2
+          path: |
+            sidi_yf_pit_proxy_v2_summary.csv
+            sidi_yf_pit_proxy_v2_coverage.csv
+            sidi_yf_pit_proxy_v2_results.json
+          if-no-files-found: warn

@@ -1,0 +1,44 @@
+name: SIDI PIT Calibration
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'calibrate_pit_proxy.py'
+      - '.github/workflows/sidi-pit-calibration.yml'
+      - 'pit_proxy_fast.py'
+      - 'historical_membership.py'
+      - 'modules/ingesta/scoring.py'
+      - 'data/history/fundamentals/**'
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run PIT calibration
+        run: python calibrate_pit_proxy.py
+      - name: Upload calibration
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-pit-calibration
+          path: |
+            sidi_pit_calibration_summary.json
+            sidi_pit_calibration_by_date.csv
+            sidi_pit_calibration_by_metric.csv
+            sidi_pit_calibration_loso.csv
+            sidi_pit_calibration_ticker_mismatches.csv
+          if-no-files-found: warn

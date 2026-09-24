@@ -1,0 +1,24 @@
+name: SIDI Membership Bias Audit
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'analyze_membership_bias.py'
+      - '.github/workflows/sidi-membership-bias.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas
+      - run: python analyze_membership_bias.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sidi-membership-bias
+          path: sidi_future_constituents_2024_2026.csv
