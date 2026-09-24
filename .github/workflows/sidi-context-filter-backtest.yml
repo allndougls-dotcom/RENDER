@@ -1,0 +1,38 @@
+name: SIDI Context Filter Backtest
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'backtest_context_filters.py'
+      - '.github/workflows/sidi-context-filter-backtest.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run context filters in portfolio simulator
+        run: python backtest_context_filters.py
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-context-filter-backtest
+          path: |
+            sidi_context_filters_full.csv
+            sidi_context_filters_windows.csv
+            sidi_context_filters_results.json
+          if-no-files-found: warn
