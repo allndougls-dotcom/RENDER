@@ -1,0 +1,41 @@
+name: SIDI Historical Alias Audit
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'historical_ticker_aliases.py'
+      - 'audit_historical_sp500_alias_coverage.py'
+      - '.github/workflows/sidi-historical-alias-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Audit safe ticker aliases
+        run: python audit_historical_sp500_alias_coverage.py
+      - name: Upload alias audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-historical-alias-audit
+          path: |
+            sidi_sp500_aliases_verified.csv
+            sidi_sp500_after_alias_missing_prices.csv
+            sidi_sp500_after_alias_annual_audit.csv
+            sidi_sp500_alias_normalization_audit.json
+          if-no-files-found: warn
