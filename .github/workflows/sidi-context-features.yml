@@ -1,0 +1,40 @@
+name: SIDI Context Feature Discovery
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'analyze_signal_context_features.py'
+      - '.github/workflows/sidi-context-features.yml'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run contextual feature discovery
+        run: python analyze_signal_context_features.py
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-context-feature-discovery
+          path: |
+            sidi_context_feature_trades.csv
+            sidi_context_feature_buckets.csv
+            sidi_context_feature_summary.csv
+            sidi_context_feature_regimes.csv
+            sidi_context_feature_analysis.json
+          if-no-files-found: warn
