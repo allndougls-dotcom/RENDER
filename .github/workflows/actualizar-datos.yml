@@ -43,23 +43,30 @@ jobs:
       - name: Descargar repositorio
         if: steps.horario.outputs.should_run == 'true'
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Configurar Python
         if: steps.horario.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
       - name: Instalar dependencias
         if: steps.horario.outputs.should_run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Eliminar exportación anterior
         if: steps.horario.outputs.should_run == 'true'
         run: |
           mkdir -p data/master
           rm -f data/master/sp500_full_export_*.csv
           rm -f data/master/market_context.json
+
       - name: Ejecutar ingesta completa
         if: steps.horario.outputs.should_run == 'true'
         env:
@@ -67,50 +74,64 @@ jobs:
           YEARS_HISTORY: "2"
           PYTHONUNBUFFERED: "1"
         run: python main_ingesta.py
+
       - name: Comprobar resultado
         if: steps.horario.outputs.should_run == 'true'
         run: |
           test -n "$(find data/master -maxdepth 1 -name 'sp500_full_export_*.csv' -print -quit)"
           test -f data/master/market_context.json
           ls -lh data/master
+
       - name: Publicar datos actualizados
         if: steps.horario.outputs.should_run == 'true'
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/master/sp500_full_export_*.csv data/master/market_context.json
-          git add -u data/master
-          if git diff --cached --quiet; then
-            echo "Los datos no han cambiado; no se crea ningún commit."
-            exit 0
-          fi
 
-          git commit -m "data: actualizar STOCK-RADAR [skip actions]"
+          # Conservamos fuera del working tree los ficheros recién generados.
+          # Así podemos sincronizarnos con main SIN intentar rebasear archivos
+          # de datos que cambian cada día y que provocaban conflictos.
+          TMP_DIR="$(mktemp -d)"
+          cp data/master/sp500_full_export_*.csv "$TMP_DIR/"
+          cp data/master/market_context.json "$TMP_DIR/market_context.json"
 
-          # El checkout se hizo al INICIO del job (hace ~13 min con la ingesta
-          # completa de por medio) — si alguien más subió commits a main
-          # mientras tanto, el push directo se rechaza ("fetch first").
-          # Sincronizamos con el remoto antes de empujar, con reintentos
-          # por si hay una carrera entre varias ejecuciones casi simultáneas.
           MAX_INTENTOS=5
           intento=1
-          until git push; do
-            if [ "$intento" -ge "$MAX_INTENTOS" ]; then
-              echo "::error::No se pudo publicar tras $MAX_INTENTOS intentos de sincronización."
-              exit 1
-            fi
-            echo "Push rechazado (intento $intento/$MAX_INTENTOS) — sincronizando con el remoto y reintentando..."
-            # --rebase: reaplica nuestro commit de datos ENCIMA de lo que haya
-            # nuevo en main, en vez de crear un merge commit. Como este job
-            # solo toca data/master/, no debería haber conflictos reales salvo
-            # que alguien edite esos mismos archivos a mano en paralelo.
-            if ! git pull --rebase origin main; then
-              echo "::error::git pull --rebase falló — puede haber un conflicto real que requiere revisión manual."
-              git rebase --abort || true
-              exit 1
-            fi
-            intento=$((intento + 1))
-            sleep $((RANDOM % 10 + 5))  # pequeña espera aleatoria para desincronizar reintentos concurrentes
-          done
 
-          echo "✅ Datos publicados correctamente en main."
+          while true; do
+            echo "Sincronizando con origin/main antes de publicar (intento $intento/$MAX_INTENTOS)..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Restauramos SIEMPRE los datos producidos por esta ingesta sobre
+            # el main más reciente. De este modo no existe conflicto de rebase.
+            mkdir -p data/master
+            rm -f data/master/sp500_full_export_*.csv
+            cp "$TMP_DIR"/sp500_full_export_*.csv data/master/
+            cp "$TMP_DIR/market_context.json" data/master/market_context.json
+
+            git add -f data/master/sp500_full_export_*.csv data/master/market_context.json
+            git add -u data/master
+
+            if git diff --cached --quiet; then
+              echo "Los datos no han cambiado; no se crea ningún commit."
+              exit 0
+            fi
+
+            git commit -m "data: actualizar STOCK-RADAR [skip actions]"
+
+            if git push origin HEAD:main; then
+              echo "✅ Datos publicados correctamente en main."
+              break
+            fi
+
+            if [ "$intento" -ge "$MAX_INTENTOS" ]; then
+              echo "::error::No se pudo publicar tras $MAX_INTENTOS intentos."
+              exit 1
+            fi
+
+            echo "El remoto cambió durante el push; reintentando sobre el main más reciente..."
+            intento=$((intento + 1))
+            sleep $((RANDOM % 10 + 5))
+          done
