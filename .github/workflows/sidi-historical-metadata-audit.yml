@@ -1,0 +1,38 @@
+name: SIDI Historical Metadata Audit
+
+on:
+  push:
+    branches: [sidi-backtest-improvements]
+    paths:
+      - 'audit_historical_sp500_metadata.py'
+      - 'historical_ticker_aliases.py'
+      - '.github/workflows/sidi-historical-metadata-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Audit historical metadata
+        run: python audit_historical_sp500_metadata.py
+      - name: Upload metadata audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-historical-metadata-audit
+          path: |
+            sidi_sp500_historical_metadata_2020_2024.csv
+            sidi_sp500_historical_metadata_missing.csv
+            sidi_sp500_historical_metadata_audit.json
+          if-no-files-found: warn
