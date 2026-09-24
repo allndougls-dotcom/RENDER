@@ -1,0 +1,40 @@
+name: SIDI OOS 2020-2024
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'backtest_oos_2020_2024.py'
+      - 'pit_proxy_ttm_fast.py'
+      - '.github/workflows/sidi-oos-2020-2024.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run frozen OOS validation
+        run: python backtest_oos_2020_2024.py
+      - name: Upload OOS results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-oos-2020-2024
+          path: |
+            sidi_oos_2020_2024_summary.csv
+            sidi_oos_2020_2024_by_year.csv
+            sidi_oos_2020_2024_coverage.csv
+            sidi_oos_2020_2024_results.json
+          if-no-files-found: warn
