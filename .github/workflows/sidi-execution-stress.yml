@@ -1,0 +1,40 @@
+name: SIDI Execution Stress
+on:
+  workflow_dispatch:
+  push:
+    branches: [sidi-backtest-improvements]
+    paths:
+      - 'stress_execution_complete_case.py'
+      - '.github/workflows/sidi-execution-stress.yml'
+permissions:
+  contents: read
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run execution stress
+        run: python stress_execution_complete_case.py
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-execution-stress
+          path: |
+            sidi_execution_stress.csv
+            sidi_execution_gap_events.csv
+            sidi_execution_pit_coverage.csv
+            sidi_execution_stress.json
+          if-no-files-found: warn
