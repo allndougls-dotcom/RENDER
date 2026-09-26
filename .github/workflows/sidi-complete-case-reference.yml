@@ -1,0 +1,39 @@
+name: SIDI Complete Case Reference
+on:
+  workflow_dispatch:
+  push:
+    branches: [sidi-backtest-improvements]
+    paths:
+      - 'backtest_complete_case_reference.py'
+      - '.github/workflows/sidi-complete-case-reference.yml'
+permissions:
+  contents: read
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run complete-case reference backtest
+        run: python backtest_complete_case_reference.py
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-complete-case-reference
+          path: |
+            sidi_complete_case_reference.csv
+            sidi_complete_case_reference.json
+            sidi_complete_case_pit_coverage.csv
+          if-no-files-found: warn
