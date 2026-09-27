@@ -1,0 +1,40 @@
+name: SIDI Slot Randomization Stress
+on:
+  workflow_dispatch:
+  push:
+    branches: [sidi-backtest-improvements]
+    paths:
+      - 'stress_slot_randomization.py'
+      - '.github/workflows/sidi-slot-randomization.yml'
+permissions:
+  contents: read
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run slot randomization stress
+        run: python stress_slot_randomization.py
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-slot-randomization
+          path: |
+            sidi_slot_randomization_runs.csv
+            sidi_slot_randomization_summary.csv
+            sidi_slot_randomization_pit_coverage.csv
+            sidi_slot_randomization.json
+          if-no-files-found: warn
