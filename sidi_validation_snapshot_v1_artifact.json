@@ -1,0 +1,16 @@
+{
+  "version": "SIDI_VALIDATION_SNAPSHOT_V1",
+  "workflow_run_id": 36388076425,
+  "workflow_head_sha": "db458e210c1ab99bcd05d35f05e3d8cdf2384eeb",
+  "artifact_id": 10955821068,
+  "artifact_name": "sidi-validation-snapshot-v1",
+  "artifact_digest": "sha256:f2bbcf731cc0394dfd5cd64f5959ac67a8a7acaf45b94445e76ffd31f53a3b25",
+  "snapshot_file": "sidi_validation_snapshot_v1.pkl.gz",
+  "snapshot_sha256": "607df264eeaed8242df333e36545e4d18e1e7e30a9d21ca9b51dcc349a5b58d6",
+  "snapshot_size_mib": 41.8,
+  "audit_signal_rows": 12010,
+  "period": ["2023-01-01", "2026-09-10"],
+  "price_start": "2022-01-01",
+  "retention_expires_at": "2026-12-27T06:45:50Z",
+  "note": "Pinned frozen inputs for subsequent SIDI robustness tests. Do not rebuild inputs when reproducing V1 results."
+}
