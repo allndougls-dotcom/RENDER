@@ -1,0 +1,127 @@
+name: SIDI Shadow V1 Live Validation
+
+on:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'main_ingesta.py'
+      - 'modules/ingesta/**'
+      - '.github/workflows/sidi-shadow-v1-live-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile changed strategy modules
+        run: |
+          python -m py_compile \
+            main_ingesta.py \
+            modules/ingesta/tecnico.py \
+            modules/ingesta/sidi_context.py \
+            modules/ingesta/scoring.py \
+            modules/ingesta/sidi_trade_plan.py \
+            modules/ingesta/mercado.py \
+            modules/ingesta/exportar.py
+
+      - name: Run 20 ticker live ingestion
+        run: python main_ingesta.py --test
+
+      - name: Assert SIDI Shadow V1 contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          import numpy as np
+
+          files = sorted(Path('data/master').glob('sp500_full_export_*.csv'))
+          assert files, 'No master CSV generated'
+          df = pd.read_csv(files[-1])
+
+          required = {
+              'ticker','day_open','day_high','day_low','day_close',
+              'drawdown_60d','rsi_14','macd_improving','volume_decreasing',
+              'fund_score','spy_return_20d','abnormal_return_20d',
+              'sidi_context_ready','sidi_pass_dd12','sidi_pass_rsi40',
+              'sidi_pass_macd','sidi_pass_volume','sidi_pass_fund65',
+              'sidi_pass_spy20','sidi_pass_abnormal20','sidi_full_setup',
+              'full_setup','legacy_full_setup','sidi_gate_failures',
+              'sidi_strategy_version','sidi_entry_rule','sidi_tp_atr_mult',
+              'sidi_sl_pct','sidi_time_stop_sessions','sidi_risk_pct',
+              'sidi_max_positions','sidi_gap_stop_rule','sidi_intraday_conflict_rule'
+          }
+          missing = sorted(required - set(df.columns))
+          assert not missing, f'Missing columns: {missing}'
+
+          assert set(df['sidi_strategy_version'].dropna().astype(str)) == {'SIDI_SHADOW_V1'}
+          assert np.allclose(pd.to_numeric(df['sidi_tp_atr_mult']), 0.75, equal_nan=False)
+          assert np.allclose(pd.to_numeric(df['sidi_sl_pct']), -5.0, equal_nan=False)
+          assert (pd.to_numeric(df['sidi_time_stop_sessions']) == 7).all()
+          assert np.allclose(pd.to_numeric(df['sidi_risk_pct']), 1.5, equal_nan=False)
+          assert (pd.to_numeric(df['sidi_max_positions']) == 5).all()
+          assert (df['sidi_entry_rule'].astype(str) == 'NEXT_SESSION_OPEN').all()
+          assert (df['sidi_gap_stop_rule'].astype(str) == 'EXIT_AT_OPEN_IF_OPEN_BELOW_SL').all()
+          assert (df['sidi_intraday_conflict_rule'].astype(str) == 'SL_FIRST').all()
+
+          def b(s):
+              if s.dtype == bool:
+                  return s
+              return s.astype(str).str.lower().isin(['true','1','yes'])
+
+          expected = (
+              b(df['sidi_pass_dd12']) &
+              b(df['sidi_pass_rsi40']) &
+              b(df['sidi_pass_macd']) &
+              b(df['sidi_pass_volume']) &
+              b(df['sidi_pass_fund65']) &
+              b(df['sidi_pass_spy20']) &
+              b(df['sidi_pass_abnormal20']) &
+              b(df['sidi_context_ready'])
+          )
+          actual = b(df['full_setup'])
+          explicit = b(df['sidi_full_setup'])
+          assert (actual == expected).all(), 'full_setup differs from frozen V1 gates'
+          assert (explicit == actual).all(), 'sidi_full_setup alias mismatch'
+
+          full = df[actual]
+          if len(full):
+              assert (pd.to_numeric(full['fund_score']) >= 6.5).all()
+              assert (pd.to_numeric(full['drawdown_60d']) <= -12).all()
+              assert (pd.to_numeric(full['rsi_14']) < 40).all()
+              assert b(full['macd_improving']).all()
+              assert b(full['volume_decreasing']).all()
+              assert (pd.to_numeric(full['spy_return_20d']) <= 1.0).all()
+              assert (pd.to_numeric(full['abnormal_return_20d']) <= -10.0).all()
+
+          ready = int(b(df['sidi_context_ready']).sum())
+          assert ready > 0, 'No ticker obtained valid SIDI context'
+          print(f'OK: {len(df)} rows, {ready} context-ready, {len(full)} FULL SIDI_SHADOW_V1')
+          PY
+
+      - name: Upload validation CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-shadow-v1-live-validation
+          path: |
+            data/master/sp500_full_export_*.csv
+            data/master/market_context.json
+          if-no-files-found: error
+          retention-days: 30
