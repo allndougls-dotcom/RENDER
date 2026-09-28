@@ -1,0 +1,57 @@
+name: SIDI Regime Sector Stress
+
+on:
+  push:
+    branches: [sidi-backtest-improvements]
+    paths:
+      - stress_regime_sector.py
+      - .github/workflows/sidi-regime-sector-stress.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download frozen validation snapshot V1
+        uses: actions/download-artifact@v4
+        with:
+          name: sidi-validation-snapshot-v1
+          path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: allndougls-dotcom/RENDER
+          run-id: 36388076425
+
+      - name: Run regime and sector stress
+        run: python stress_regime_sector.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-regime-sector-stress
+          path: |
+            sidi_regime_sector_runs.csv
+            sidi_regime_sector_summary.csv
+            sidi_regime_sector_diagnostics.csv
+            sidi_regime_sector.json
+          if-no-files-found: error
+          retention-days: 90
