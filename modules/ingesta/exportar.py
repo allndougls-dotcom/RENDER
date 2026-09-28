@@ -25,7 +25,8 @@ def exportar_csv(sp500, df_tech, df_fund, df_earn, market_ctx, cfg) -> Path:
         df["earnings_date"]      = None
         df["earnings_warning"]   = False
 
-    # Añadir contexto de mercado a cada fila
+    # Contexto de mercado global. spy_return_20d ya existe por fila desde
+    # sidi_context; sólo usamos el valor global como fallback si faltase.
     df["market_regime"]       = market_ctx.get("market_regime", "DESCONOCIDO")
     df["market_regime_score"] = market_ctx.get("regime_score", 5)
     df["spy_price"]           = market_ctx.get("spy_price", 0)
@@ -33,8 +34,11 @@ def exportar_csv(sp500, df_tech, df_fund, df_earn, market_ctx, cfg) -> Path:
     df["spy_rsi"]             = market_ctx.get("spy_rsi", 50)
     df["vix"]                 = market_ctx.get("vix", None)
     df["market_filter_rec"]   = market_ctx.get("filter_rec", "")
+    df["market_sidi_strategy_version"] = market_ctx.get("sidi_strategy_version", "SIDI_SHADOW_V1")
+    df["market_spy20_gate"]   = market_ctx.get("sidi_spy20_gate", False)
+    if "spy_return_20d" not in df.columns:
+        df["spy_return_20d"] = market_ctx.get("spy_return_20d", None)
 
-    # Guardar contexto de mercado también como JSON separado (para la app)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     market_json_path = DATA_DIR / "market_context.json"
     with open(market_json_path, 'w', encoding='utf-8') as f:
@@ -47,8 +51,10 @@ def exportar_csv(sp500, df_tech, df_fund, df_earn, market_ctx, cfg) -> Path:
     export.to_csv(path, index=False, float_format="%.4f")
 
     size_kb = path.stat().st_size / 1024
+    full_count = int(export.get("full_setup", pd.Series(dtype=bool)).fillna(False).sum()) if len(export) else 0
     print(f"\n  💾 Guardado en : {path}")
     print(f"     Tamaño      : {size_kb:.0f} KB · {len(export)} empresas · {len(export.columns)} columnas")
-    print(f"  📊 Mercado     : {market_ctx['regime_icon']} {market_ctx['market_regime']} — {market_ctx['filter_rec']}")
+    print(f"  📊 Mercado     : {market_ctx['regime_icon']} {market_ctx['market_regime']}")
+    print(f"  🎯 SIDI Shadow : {full_count} FULL · {market_ctx.get('filter_rec', '')}")
 
     return path
