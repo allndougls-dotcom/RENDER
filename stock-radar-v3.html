@@ -4495,6 +4495,21 @@ function renderPriceChart(root, data) {
     }
   };
 
+  // Eje X: etiquetas cortas y sin solaparse (en móvil caben menos).
+  // En 5D se marca solo el cambio de día, como hace Google Finance.
+  const estrecho = (canvas.parentElement.clientWidth || 600) < 480;
+  const xTicks = { color: muted, font: { family: 'DM Mono', size: 9 }, maxRotation: 0 };
+  if (data.range === '5d') {
+    const dia = t => t.slice(0, 10);
+    Object.assign(xTicks, {
+      autoSkip: false,
+      callback: (v, i) => (i === 0 || dia(pts[i].t) !== dia(pts[i - 1].t))
+        ? new Date(pts[i].t).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : null,
+    });
+  } else {
+    Object.assign(xTicks, { autoSkip: true, autoSkipPadding: 16, maxTicksLimit: estrecho ? 4 : 6 });
+  }
+
   __priceCharts[root.id] = new Chart(ctx, {
     type: 'line',
     data: { labels: pts.map(p => fmtDate(p.t, false)), datasets },
@@ -4519,7 +4534,7 @@ function renderPriceChart(root, data) {
         else setHead(last, pts[pts.length - 1].t, false);
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, maxRotation: 0, autoSkip: true } },
+        x: { grid: { display: false }, ticks: xTicks },
         y: { position: 'right', grid: { color: grid }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, callback: v => '$' + v } },
       },
     },
