@@ -1,5 +1,11 @@
 name: Actualizar datos STOCK-RADAR
 on:
+  push:
+    branches: [main]
+    paths:
+      - "main_ingesta.py"
+      - "modules/ingesta/**"
+      - ".github/workflows/actualizar-datos.yml"
   workflow_dispatch:
   schedule:
     # GitHub Actions usa UTC. Se programan las dos equivalencias posibles
@@ -24,9 +30,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$EVENT_NAME" = "push" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Ejecución manual autorizada."
+            echo "Ejecución autorizada por evento $EVENT_NAME."
             exit 0
           fi
 
@@ -89,9 +95,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Conservamos fuera del working tree los ficheros recién generados.
-          # Así podemos sincronizarnos con main SIN intentar rebasear archivos
-          # de datos que cambian cada día y que provocaban conflictos.
           TMP_DIR="$(mktemp -d)"
           cp data/master/sp500_full_export_*.csv "$TMP_DIR/"
           cp data/master/market_context.json "$TMP_DIR/market_context.json"
@@ -104,8 +107,6 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Restauramos SIEMPRE los datos producidos por esta ingesta sobre
-            # el main más reciente. De este modo no existe conflicto de rebase.
             mkdir -p data/master
             rm -f data/master/sp500_full_export_*.csv
             cp "$TMP_DIR"/sp500_full_export_*.csv data/master/
