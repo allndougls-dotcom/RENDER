@@ -1,0 +1,65 @@
+name: SIDI Parameter Perturbation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - build_validation_snapshot_v1.py
+      - stress_parameter_perturbation.py
+      - .github/workflows/sidi-parameter-perturbation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build frozen validation snapshot V1
+        run: python build_validation_snapshot_v1.py
+
+      - name: Run one-at-a-time parameter perturbation
+        run: python stress_parameter_perturbation.py
+
+      - name: Upload frozen snapshot V1
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-validation-snapshot-v1
+          path: |
+            sidi_validation_snapshot_v1.pkl.gz
+            sidi_validation_snapshot_v1_manifest.json
+            sidi_validation_snapshot_v1_signals.csv
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Upload parameter perturbation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-parameter-perturbation
+          path: |
+            sidi_parameter_perturbation.csv
+            sidi_parameter_perturbation_family_summary.csv
+            sidi_parameter_perturbation.json
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 90
