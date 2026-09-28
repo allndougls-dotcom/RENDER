@@ -1,0 +1,74 @@
+name: SIDI Final Ablation Stress
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - sidi-backtest-improvements
+    paths:
+      - 'build_ablation_snapshot_v1.py'
+      - 'stress_ablation.py'
+      - '.github/workflows/sidi-ablation-stress.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          ref: sidi-backtest-improvements
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download frozen validation snapshot V1
+        uses: actions/download-artifact@v4
+        with:
+          name: sidi-validation-snapshot-v1
+          path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: allndougls-dotcom/RENDER
+          run-id: 36388076425
+
+      - name: Build ablation-ready frozen snapshot
+        run: python build_ablation_snapshot_v1.py
+
+      - name: Run final ablation stress
+        run: python stress_ablation.py
+
+      - name: Upload ablation snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-ablation-snapshot-v1
+          path: |
+            sidi_ablation_snapshot_v1.pkl.gz
+            sidi_ablation_snapshot_v1_manifest.json
+            sidi_ablation_snapshot_v1_signals.csv
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Upload ablation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-final-ablation-stress
+          path: |
+            sidi_ablation_runs.csv
+            sidi_ablation_summary.csv
+            sidi_ablation.json
+          if-no-files-found: error
+          retention-days: 90
