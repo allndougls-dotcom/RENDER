@@ -1570,7 +1570,7 @@ body::before {
     </div>
     <button class="btn btn-primary" onclick="updateFilters()">Aplicar</button>
     <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
-    <button class="btn btn-primary" style="background:var(--amber);border-color:var(--amber)" onclick="seleccionarTodasHot()">🔥 Seleccionar todas las HOT</button>
+    <button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" onclick="seleccionarTodasFullSetup()" title="SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12 · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1 · Abnormal20≤-10">🎯 Seleccionar todas las FULL SETUP</button>
   </div>
 
   <div id="scannerPrepararBar" style="display:none;position:sticky;top:0;z-index:20;background:var(--accent);border-radius:8px;padding:10px 16px;margin-bottom:12px;align-items:center;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.3)">
@@ -2253,20 +2253,21 @@ function renderTable() {
 
 let scannerSeleccionadas = new Set();
 
-// ── Seleccionar de golpe TODAS las empresas HOT del universo completo,
-// independientemente del filtro visual activo en ese momento (score,
-// drawdown, sector...). Usa directamente allData/setupHot, no depende
+// ── Seleccionar de golpe TODAS las empresas FULL SETUP (SIDI_SHADOW_V1)
+// del universo completo, independientemente del filtro visual activo en
+// ese momento (score, drawdown, sector...). Usa directamente
+// allData/fullSetup, no depende
 // de qué filas estén pintadas en la tabla en ese instante. Sin límite
 // de cantidad — el AI Preparator/SIDI Payload procesan tantas como
 // se marquen, el prompt simplemente crece proporcionalmente.
-function seleccionarTodasHot() {
-  const hot = allData.filter(d => d.setupHot === true);
-  if (!hot.length) {
-    alert('No hay ninguna empresa marcada como HOT en los datos actuales.');
+function seleccionarTodasFullSetup() {
+  const full = allData.filter(d => d.fullSetup === true);
+  if (!full.length) {
+    alert('No hay ninguna empresa en FULL SETUP en los datos actuales.');
     return;
   }
 
-  hot.forEach(d => scannerSeleccionadas.add(d.ticker));
+  full.forEach(d => scannerSeleccionadas.add(d.ticker));
 
   // Sincronizar visualmente los checkboxes de las filas que estén
   // pintadas ahora mismo (las que no estén visibles por el filtro
