@@ -1,0 +1,48 @@
+name: SIDI Shadow V1 UI Migration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/apply_sidi_shadow_v1_ui_migration.py'
+      - '.github/workflows/sidi-shadow-v1-ui-migration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply deterministic migration
+        run: python scripts/apply_sidi_shadow_v1_ui_migration.py
+      - name: Syntax-check server
+        run: python -m py_compile servidor_local.py
+      - name: Validate migrated markers
+        run: |
+          grep -q "FULL V1" stock-radar-v3.html
+          grep -q "Registro legacy en modo sólo lectura" stock-radar-v3.html
+          grep -q "target_atr_multiple" servidor_local.py
+          grep -q "abnormal_return_20d_pct" servidor_local.py
+      - name: Commit migration
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stock-radar-v3.html servidor_local.py
+          if git diff --cached --quiet; then
+            echo "No migration changes needed."
+            exit 0
+          fi
+          git commit -m "ui: align app with SIDI_SHADOW_V1 [skip actions]"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
