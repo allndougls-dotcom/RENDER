@@ -601,7 +601,7 @@ td { padding: 9px 12px; white-space: nowrap; }
   border: 1px solid var(--border2);
   border-radius: 10px;
   padding: 24px;
-  width: 600px;
+  width: 680px;
   max-width: 95vw;
   max-height: 85vh;
   overflow-y: auto;
@@ -627,6 +627,24 @@ td { padding: 9px 12px; white-space: nowrap; }
 }
 
 .modal-name { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+
+/* GRÁFICO DE PRECIO (ficha de empresa, estilo Yahoo/Google Finance) */
+.pc-wrap { margin: 4px 0 18px; }
+.pc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-height: 34px; }
+.pc-price { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; color: var(--text); }
+.pc-change { font-size: 12px; font-weight: 600; }
+.pc-when { font-size: 10px; color: var(--text2); }
+.pc-wrap .pc-range { display: flex; gap: 2px; margin: 8px 0 6px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.pc-wrap .pc-range button {
+  background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  color: var(--text2); font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600;
+  padding: 6px 10px; cursor: pointer; white-space: nowrap;
+}
+.pc-wrap .pc-range button:hover { color: var(--text); }
+.pc-wrap .pc-range button.active { color: var(--pc-color, var(--accent)); border-bottom-color: var(--pc-color, var(--accent)); }
+.pc-canvas { position: relative; height: 240px; }
+.pc-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; color: var(--text2); padding: 0 20px; pointer-events: none; }
+@media (max-width: 600px) { .pc-canvas { height: 200px; } .pc-price { font-size: 20px; } }
 
 .modal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
 .modal-metric { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
@@ -2361,6 +2379,7 @@ function openModal(d) {
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-ticker" style="display:flex;align-items:center">${logoImg(d.ticker, 30)}${d.ticker}</div>
     <div class="modal-name">${d.name} · ${d.sector}</div>
+    <div id="modalPriceChart"></div>
 
     <div class="modal-grid">
       <div class="modal-metric"><div class="modal-metric-label">Precio actual</div><div class="modal-metric-val">$${d.price.toFixed(2)}</div></div>
@@ -2398,6 +2417,7 @@ function openModal(d) {
   `;
 
   document.getElementById('modalOverlay').classList.add('open');
+  mountPriceChart(document.getElementById('modalPriceChart'), d.ticker);
 }
 
 function closeModal(e) {
@@ -4335,6 +4355,178 @@ function logoFallback(img) {
   img.replaceWith(span);
 }
 
+// ── Gráfico de precio de la ficha (estilo Yahoo / Google Finance) ──
+// mountPriceChart(contenedor, ticker) pinta cabecera con precio y variación,
+// selector de rango (1D … MAX) y un gráfico de área que se pone verde o rojo
+// según suba o baje en el periodo. Al pasar el ratón muestra el precio y la
+// variación de ese punto. Los datos salen de /api/history/{ticker} (servidor).
+const PRICE_RANGES = [
+  ['1d', '1D'], ['5d', '5D'], ['1mo', '1M'], ['6mo', '6M'],
+  ['ytd', 'YTD'], ['1y', '1A'], ['5y', '5A'], ['max', 'MÁX'],
+];
+const PRICE_RANGE_LABELS = { '1d': 'hoy', '5d': '5 días', '1mo': '1 mes', '6mo': '6 meses', 'ytd': 'en el año', '1y': '1 año', '5y': '5 años', 'max': 'desde el inicio' };
+const __priceCharts = {};
+const __priceHistCache = {};
+
+function mountPriceChart(container, ticker) {
+  if (!container || !ticker) return;
+  // Libera los gráficos de fichas anteriores que ya no están en pantalla
+  Object.keys(__priceCharts).forEach(k => { if (!document.getElementById(k)) destroyPriceChart(k); });
+  const id = 'pc' + Math.random().toString(36).slice(2, 8);
+  let rango = '6mo';
+  try { rango = localStorage.getItem('priceChartRange') || '6mo'; } catch (e) {}
+  if (!PRICE_RANGES.some(r => r[0] === rango)) rango = '6mo';
+
+  container.innerHTML = `
+    <div class="pc-wrap" id="${id}">
+      <div class="pc-head"><span class="pc-price">—</span><span class="pc-change"></span><span class="pc-when"></span></div>
+      <div class="pc-range">${PRICE_RANGES.map(([k, l]) => `<button type="button" data-range="${k}">${l}</button>`).join('')}</div>
+      <div class="pc-canvas"><canvas></canvas><div class="pc-msg">Cargando gráfico…</div></div>
+    </div>`;
+  const root = container.querySelector('#' + id);
+  root.querySelectorAll('.pc-range button').forEach(b => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      try { localStorage.setItem('priceChartRange', b.dataset.range); } catch (e) {}
+      loadPriceChart(root, ticker, b.dataset.range);
+    };
+  });
+  loadPriceChart(root, ticker, rango);
+}
+
+async function loadPriceChart(root, ticker, rango) {
+  root.dataset.req = rango;
+  root.querySelectorAll('.pc-range button').forEach(b => b.classList.toggle('active', b.dataset.range === rango));
+  const msg = root.querySelector('.pc-msg');
+  msg.textContent = 'Cargando gráfico…'; msg.style.display = 'flex';
+
+  const key = ticker + '|' + rango;
+  let data = __priceHistCache[key];
+  if (!data || Date.now() - data.__at > 5 * 60 * 1000) {
+    try {
+      const res = await fetch(`/api/history/${encodeURIComponent(ticker)}?range=${rango}`, { signal: AbortSignal.timeout(20000) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error === 'sin_datos' ? 'Sin datos de precio para este ticker' : (json.error || 'HTTP ' + res.status));
+      data = json; data.__at = Date.now(); __priceHistCache[key] = data;
+    } catch (e) {
+      if (root.dataset.req !== rango) return;
+      destroyPriceChart(root.id);
+      msg.textContent = location.protocol === 'file:'
+        ? 'El gráfico necesita abrir la app desde el servidor (INICIAR.bat o Render).'
+        : 'No se pudo cargar el gráfico: ' + e.message;
+      return;
+    }
+  }
+  if (root.dataset.req !== rango || !document.body.contains(root)) return; // el usuario cambió de rango/ficha mientras cargaba
+  renderPriceChart(root, data);
+}
+
+function destroyPriceChart(id) {
+  if (__priceCharts[id]) { __priceCharts[id].destroy(); delete __priceCharts[id]; }
+}
+
+function renderPriceChart(root, data) {
+  const msg = root.querySelector('.pc-msg');
+  const pts = (data.points || []).filter(p => p.c != null);
+  if (!pts.length) { msg.textContent = 'Sin datos de precio para este rango'; return; }
+  if (typeof Chart === 'undefined') { msg.textContent = 'No se pudo cargar Chart.js'; return; }
+  msg.style.display = 'none';
+
+  const css = getComputedStyle(root);
+  const green = css.getPropertyValue('--green').trim() || '#22c55e';
+  const red = css.getPropertyValue('--red').trim() || '#ef4444';
+  const grid = css.getPropertyValue('--border').trim() || '#1e2235';
+  const muted = css.getPropertyValue('--text2').trim() || '#7880a0';
+
+  const base = data.prev_close ?? pts[0].c;
+  const last = pts[pts.length - 1].c;
+  const up = last >= base;
+  const color = up ? green : red;
+  root.style.setProperty('--pc-color', color);
+
+  const fmtDate = (t, largo) => {
+    const d = new Date(data.intraday ? t : t + 'T12:00:00');
+    if (data.intraday) {
+      const hora = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      return data.range === '1d' && !largo ? hora : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) + ' ' + hora;
+    }
+    const opts = ['5y', 'max'].includes(data.range) && !largo ? { month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short', year: largo ? 'numeric' : undefined };
+    return d.toLocaleDateString('es-ES', opts);
+  };
+  const fmtPrice = v => '$' + v.toFixed(2); // mismo formato que el resto de la app ($185.20)
+
+  const head = root.querySelector('.pc-head');
+  const setHead = (precio, t, hover) => {
+    const diff = precio - base, pct = base ? diff / base * 100 : 0;
+    const c = diff >= 0 ? green : red;
+    head.querySelector('.pc-price').textContent = fmtPrice(precio);
+    const ch = head.querySelector('.pc-change');
+    ch.style.color = c;
+    ch.textContent = `${diff >= 0 ? '+' : ''}${diff.toFixed(2)} (${diff >= 0 ? '+' : ''}${pct.toFixed(2)}%) ${diff >= 0 ? '▲' : '▼'}`;
+    head.querySelector('.pc-when').textContent = hover ? fmtDate(t, true) : PRICE_RANGE_LABELS[data.range] || '';
+  };
+  setHead(last, pts[pts.length - 1].t, false);
+
+  destroyPriceChart(root.id);
+  const canvas = root.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  const h = canvas.parentElement.clientHeight || 240;
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color + '55');
+  grad.addColorStop(1, color + '00');
+
+  const datasets = [{
+    data: pts.map(p => p.c), borderColor: color, backgroundColor: grad, fill: 'start',
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: color, tension: 0,
+  }];
+  if (data.prev_close != null) {
+    datasets.push({ data: pts.map(() => data.prev_close), borderColor: muted, borderDash: [4, 4], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, fill: false });
+  }
+
+  // Línea vertical que sigue al ratón, como en Yahoo/Google
+  const crosshair = {
+    id: 'pcCrosshair',
+    afterDraw(chart) {
+      const a = chart.tooltip && chart.tooltip.getActiveElements();
+      if (!a || !a.length) return;
+      const x = a[0].element.x, { top, bottom } = chart.chartArea, c = chart.ctx;
+      c.save(); c.beginPath(); c.moveTo(x, top); c.lineTo(x, bottom);
+      c.lineWidth = 1; c.strokeStyle = muted; c.setLineDash([3, 3]); c.stroke(); c.restore();
+    }
+  };
+
+  __priceCharts[root.id] = new Chart(ctx, {
+    type: 'line',
+    data: { labels: pts.map(p => fmtDate(p.t, false)), datasets },
+    plugins: [crosshair],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.datasetIndex === 0,
+          displayColors: false, backgroundColor: 'rgba(10,12,20,0.92)', borderColor: grid, borderWidth: 1,
+          titleFont: { family: 'DM Mono', size: 10 }, bodyFont: { family: 'DM Mono', size: 12, weight: 'bold' },
+          callbacks: {
+            title: items => fmtDate(pts[items[0].dataIndex].t, true),
+            label: item => fmtPrice(item.parsed.y),
+          },
+        },
+      },
+      onHover: (ev, els) => {
+        if (els && els.length) { const p = pts[els[0].index]; setHead(p.c, p.t, true); }
+        else setHead(last, pts[pts.length - 1].t, false);
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, maxRotation: 0, autoSkip: true } },
+        y: { position: 'right', grid: { color: grid }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, callback: v => '$' + v } },
+      },
+    },
+  });
+  canvas.onmouseleave = () => setHead(last, pts[pts.length - 1].t, false);
+}
+
 // ══════════════════════════════════════════════════════════════
 // BARRA DE PROGRESO GLOBAL — usada tanto por triggerIngesta() (progreso
 // estimado por tiempo, ya que el navegador no puede saber el % real de
@@ -5908,7 +6100,7 @@ function ccRenderStats(){let c=state.trades.filter(t=>t.status==='CLOSED'),w=c.f
 function bucket(s){s=num(s);return s>=8?'8,0–10':s>=7?'7,0–7,9':s>=6?'6,0–6,9':s>=5?'5,0–5,9':'<5'}function group(c,key){let m={};c.forEach(t=>(m[key(t)]??=[]).push(t));return Object.entries(m).map(([k,a])=>({k,n:a.length,wr:a.filter(t=>realized(t)>0).length/a.length*100,avgR:a.map(rMult).reduce((x,y)=>x+y,0)/a.length,pnl:a.reduce((s,t)=>s+realized(t),0)})).sort((a,b)=>b.avgR-a.avgR)}function statsTable(d){if(!d.length)return '<span class="muted">Necesitas operaciones cerradas.</span>';return `<table style="min-width:0"><thead><tr><th>Grupo</th><th>N</th><th>Win</th><th>R medio</th><th>P&L</th></tr></thead><tbody>${d.map(x=>`<tr><td>${esc(x.k)}</td><td>${x.n}</td><td>${pct(x.wr,0)}</td><td class="${x.avgR>0?'good':x.avgR<0?'bad':''}">${fmt(x.avgR,2)}R</td><td>${eur(x.pnl)}</td></tr>`).join('')}</tbody></table>`}function calibrate(c){if(c.length<5)return `<div class="auditItem"><b>Faltan datos</b><div class="small">Con ${c.length} trades cerrados todavía no conviene cambiar reglas. Espera al menos 20–30 para conclusiones serias.</div></div>`;let g=group(c,t=>bucket(t.analysisNewsScore)),best=[...g].sort((a,b)=>b.avgR-a.avgR)[0],worst=[...g].sort((a,b)=>a.avgR-b.avgR)[0];return `<div class="auditItem"><b class="good">Mejor rango: ${best.k}</b><div class="small">${fmt(best.avgR,2)}R/trade · ${best.n} trades</div></div><div class="auditItem"><b class="${worst.avgR<0?'bad':'warn'}">Más débil: ${worst.k}</b><div class="small">${fmt(worst.avgR,2)}R/trade · ${worst.n} trades</div></div>`}function maxDD(){let c=state.trades.filter(t=>t.status==='CLOSED').sort((a,b)=>String(a.exitDate).localeCompare(String(b.exitDate))),e=num(state.settings.capital),peak=e,m=0;c.forEach(t=>{e+=realized(t);peak=Math.max(peak,e);m=Math.max(m,peak?(peak-e)/peak*100:0)});return m}
 function renderCalendar(){let y=calDate.getFullYear(),m=calDate.getMonth(),first=new Date(y,m,1),start=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate();$('calendarTitle').textContent=new Intl.DateTimeFormat('es-ES',{month:'long',year:'numeric'}).format(first);let h=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(x=>`<div class="calHead">${x}</div>`).join(''),cells='';for(let i=0;i<42;i++){let d=i-start+1,cm=m,cy=y,off=false;if(d<1){d=prev+d;cm=m-1;off=true;if(cm<0){cm=11;cy--}}else if(d>days){d-=days;cm=m+1;off=true;if(cm>11){cm=0;cy++}}let ds=`${cy}-${String(cm+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,ev=[];latest().forEach(a=>{if(a.earningsDate===ds)ev.push(`<div class="event bad">Earnings · ${a.ticker}</div>`);let x=new Date(a.date+'T12:00:00');x.setDate(x.getDate()+num(state.settings.expireDays));if(x.toISOString().slice(0,10)===ds)ev.push(`<div class="event warn">Caduca · ${a.ticker}</div>`)});state.trades.forEach(t=>{if(t.entryDate===ds)ev.push(`<div class="event good">Entrada · ${t.ticker}</div>`);if(t.tp1Date===ds)ev.push(`<div class="event cyan">TP1 · ${t.ticker}</div>`);if(t.exitDate===ds)ev.push(`<div class="event">Cierre · ${t.ticker}</div>`)});cells+=`<div class="day ${off?'off':''}"><div class="dayNum">${d}</div>${ev.join('')}</div>`}$('calendarGrid').innerHTML=h+cells}function changeMonth(n){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+n,1);renderCalendar()}function calendarToday(){calDate=new Date();renderCalendar()}
 function loadSettings(){let s=state.settings;$('setCapital').value=s.capital;$('setRiskMax').value=s.riskMax;$('setMaxPositions').value=s.maxPositions;$('setPortfolioRisk').value=s.portfolioRiskPct;$('setWarnDays').value=s.warnDays;$('setExpireDays').value=s.expireDays;$('setEarningsDays').value=s.earningsBlockDays;$('setMovePct').value=s.moveReanalysePct}function saveSettings(){state.settings={capital:num($('setCapital').value),riskMax:num($('setRiskMax').value),maxPositions:Math.max(1,num($('setMaxPositions').value)),portfolioRiskPct:num($('setPortfolioRisk').value),warnDays:num($('setWarnDays').value),expireDays:num($('setExpireDays').value),earningsBlockDays:num($('setEarningsDays').value),moveReanalysePct:num($('setMovePct').value)};save();renderAll()}function resetSettings(){state.settings={...DEF};save();renderAll()}
-function showTicker(t){let list=analysesFor(t),a=list.at(-1);if(!a)return;$('tickerTitle').textContent=`${t} · ${a.company||''}`;$('tickerDetail').innerHTML=`<div class="grid two"><div><div class="kv"><div>Sector</div><div>${esc(a.sector||'—')} / ${esc(a.subsector||'—')}</div><div>News Score</div><div>${score(a.newsScore)}</div><div>Veredicto</div><div>${vb(a.verdict)}</div><div>Precio ref.</div><div>${a.priceEur?eur(a.priceEur,2):'—'}</div><div>Entrada / SL</div><div>${a.entry?eur(a.entry,2):'—'} / ${a.sl?eur(a.sl,2):'—'}</div><div>TP1 / TP2</div><div>${a.tp1?eur(a.tp1,2):'—'} / ${a.tp2?eur(a.tp2,2):'—'}</div><div>Earnings</div><div>${a.earningsDate||'—'}</div><div>Motivo caída</div><div>${esc(a.fallReason||'—')}</div></div><h3>Tesis</h3>${esc(a.thesis||'—')}</div><div><h3>Blockers</h3>${chips(a.blockers)}<h3>Penalties</h3>${chips(a.penalties)}<h3>Catalizadores</h3>${chips(a.catalysts)}</div></div><h3>Evolución de score</h3><div id="tickerChart" class="chart"></div><h3>Historial</h3><div class="timeline">${[...list].reverse().map(x=>`<div class="timelineItem"><div><b>${x.date}</b><div class="small">${fmt(x.newsScore,1)}/10</div></div><div>${vb(x.verdict)} <span class="small">${esc(x.decision||'')}</span><div>${esc(x.thesis||'')}</div></div></div>`).join('')}</div>`;ccOpenModal('tickerModal');setTimeout(()=>drawChart('tickerChart',list.map(x=>x.newsScore),list.map(x=>x.date),7,''),0)}function chips(a){return a&&a.length?`<div class="chips">${a.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:'<span class="muted">Ninguno.</span>'}
+function showTicker(t){let list=analysesFor(t),a=list.at(-1);if(!a)return;$('tickerTitle').textContent=`${t} · ${a.company||''}`;$('tickerDetail').innerHTML=`<div class="grid two"><div><div class="kv"><div>Sector</div><div>${esc(a.sector||'—')} / ${esc(a.subsector||'—')}</div><div>News Score</div><div>${score(a.newsScore)}</div><div>Veredicto</div><div>${vb(a.verdict)}</div><div>Precio ref.</div><div>${a.priceEur?eur(a.priceEur,2):'—'}</div><div>Entrada / SL</div><div>${a.entry?eur(a.entry,2):'—'} / ${a.sl?eur(a.sl,2):'—'}</div><div>TP1 / TP2</div><div>${a.tp1?eur(a.tp1,2):'—'} / ${a.tp2?eur(a.tp2,2):'—'}</div><div>Earnings</div><div>${a.earningsDate||'—'}</div><div>Motivo caída</div><div>${esc(a.fallReason||'—')}</div></div><h3>Tesis</h3>${esc(a.thesis||'—')}</div><div><h3>Blockers</h3>${chips(a.blockers)}<h3>Penalties</h3>${chips(a.penalties)}<h3>Catalizadores</h3>${chips(a.catalysts)}</div></div><h3>Precio</h3><div id="tickerPriceChart"></div><h3>Evolución de score</h3><div id="tickerChart" class="chart"></div><h3>Historial</h3><div class="timeline">${[...list].reverse().map(x=>`<div class="timelineItem"><div><b>${x.date}</b><div class="small">${fmt(x.newsScore,1)}/10</div></div><div>${vb(x.verdict)} <span class="small">${esc(x.decision||'')}</span><div>${esc(x.thesis||'')}</div></div></div>`).join('')}</div>`;ccOpenModal('tickerModal');mountPriceChart($('tickerPriceChart'),t);setTimeout(()=>drawChart('tickerChart',list.map(x=>x.newsScore),list.map(x=>x.date),7,''),0)}function chips(a){return a&&a.length?`<div class="chips">${a.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:'<span class="muted">Ninguno.</span>'}
 function createPlan(id){let a=state.analyses.find(x=>x.id===id);$('tradeTitle').textContent=`Crear plan · ${a.ticker}`;$('tradeForm').innerHTML=`<div class="formgrid"><label>Entrada ideal €<input id="fEntry" type="number" step=".01" value="${a.entry||''}"></label><label>SL €<input id="fSl" type="number" step=".01" value="${a.sl||''}"></label><label>TP1 €<input id="fTp1" type="number" step=".01" value="${a.tp1||''}"></label><label>TP2 €<input id="fTp2" type="number" step=".01" value="${a.tp2||''}"></label><label>Acciones<input id="fShares" type="number" value="${a.shares||''}"></label><label>Riesgo previsto €<input id="fRisk" type="number" step=".01" value="${a.risk||''}"></label><label>Motivo caída<input id="fReason" value="${esc(a.fallReason||'')}"></label><div class="span4 toolbar" style="justify-content:flex-end"><button class="primary" onclick="savePlan('${id}')">Guardar plan</button></div></div>`;ccOpenModal('tradeModal')}function savePlan(id){let a=state.analyses.find(x=>x.id===id);state.trades.push({id:uid('T'),ticker:a.ticker,analysisId:id,analysisNewsScore:a.newsScore,analysisVerdict:a.verdict,sector:a.sector,fallReason:$('fReason').value||a.fallReason,status:'PLANNED',createdAt:new Date().toISOString(),plannedEntry:num($('fEntry').value),plannedSl:num($('fSl').value),plannedTp1:num($('fTp1').value),plannedTp2:num($('fTp2').value),plannedShares:num($('fShares').value),plannedRisk:num($('fRisk').value),referencePrice:a.priceEur});save();ccCloseModal('tradeModal');renderAll();switchView('operations')}
 function editPlan(id){let t=state.trades.find(x=>x.id===id);$('tradeTitle').textContent=`Editar · ${t.ticker}`;$('tradeForm').innerHTML=`<div class="formgrid"><label>Entrada €<input id="fEntry" type="number" value="${t.plannedEntry}"></label><label>SL €<input id="fSl" type="number" value="${t.plannedSl}"></label><label>TP1 €<input id="fTp1" type="number" value="${t.plannedTp1}"></label><label>TP2 €<input id="fTp2" type="number" value="${t.plannedTp2}"></label><label>Acciones<input id="fShares" type="number" value="${t.plannedShares}"></label><div class="span4"><button class="primary" onclick="saveEdit('${id}')">Guardar</button></div></div>`;ccOpenModal('tradeModal')}function saveEdit(id){let t=state.trades.find(x=>x.id===id);t.plannedEntry=num($('fEntry').value);t.plannedSl=num($('fSl').value);t.plannedTp1=num($('fTp1').value);t.plannedTp2=num($('fTp2').value);t.plannedShares=num($('fShares').value);save();ccCloseModal('tradeModal');renderAll()}
 function openExec(id){let t=state.trades.find(x=>x.id===id);$('tradeTitle').textContent=`Ejecutar · ${t.ticker}`;$('tradeForm').innerHTML=`<div class="formgrid"><label>Fecha<input id="eDate" type="date" value="${today()}"></label><label>Precio real €<input id="ePrice" type="number" step=".01" value="${t.plannedEntry}"></label><label>Acciones<input id="eShares" type="number" value="${t.plannedShares}"></label><label>Comisión €<input id="eComm" type="number" value="0"></label><label>SL €<input id="eSl" type="number" value="${t.plannedSl}"></label><label>TP1 €<input id="eTp1" type="number" value="${t.plannedTp1}"></label><label>TP2 €<input id="eTp2" type="number" value="${t.plannedTp2}"></label><div class="span4"><button class="success" onclick="execute('${id}')">Confirmar entrada</button></div></div>`;ccOpenModal('tradeModal')}function execute(id){let t=state.trades.find(x=>x.id===id);t.status='OPEN';t.entryDate=$('eDate').value;t.entryPrice=num($('ePrice').value);t.currentPrice=t.entryPrice;t.shares=num($('eShares').value);t.commission=num($('eComm').value);t.sl=num($('eSl').value);t.initialSl=t.sl;t.tp1=num($('eTp1').value);t.tp2=num($('eTp2').value);save();ccCloseModal('tradeModal');renderAll()}

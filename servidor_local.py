@@ -587,6 +587,79 @@ def analysis_cache_save_payload(payload, rows):
     return analysis_date, saved
 
 
+# ══════════════════════════════════════════════════════════════
+# HISTÓRICO DE PRECIOS BAJO DEMANDA (gráfico de la ficha de empresa)
+# ══════════════════════════════════════════════════════════════
+# El CSV maestro no guarda series de precios, así que el gráfico tipo
+# Yahoo/Google Finance de la ficha se pide aquí al abrirla. Se cachea en
+# memoria por (ticker, rango) para no repetir descargas en la misma sesión.
+HISTORY_RANGES = {
+    # rango: (period yfinance, interval, TTL cache en segundos)
+    "1d":  ("1d",  "5m",  120),
+    "5d":  ("5d",  "30m", 300),
+    "1mo": ("1mo", "1d",  900),
+    "6mo": ("6mo", "1d",  900),
+    "ytd": ("ytd", "1d",  900),
+    "1y":  ("1y",  "1d",  900),
+    "5y":  ("5y",  "1wk", 3600),
+    "max": ("max", "1mo", 3600),
+}
+_HISTORY_CACHE = {}
+_HISTORY_LOCK = threading.Lock()
+
+
+def get_price_history(ticker, rango="6mo"):
+    ticker = (ticker or "").strip().upper()
+    if not re.match(r"^[A-Z0-9.\-^=]{1,15}$", ticker):
+        raise ValueError("ticker_invalido")
+    if rango not in HISTORY_RANGES:
+        raise ValueError("rango_invalido")
+    period, interval, ttl = HISTORY_RANGES[rango]
+    key = (ticker, rango)
+    ahora = datetime.now()
+    with _HISTORY_LOCK:
+        hit = _HISTORY_CACHE.get(key)
+        if hit and (ahora - hit["fetched_at"]).total_seconds() < ttl:
+            return hit["data"]
+
+    import yfinance as yf
+    yf_ticker = yf.Ticker(ticker.replace(".", "-"))  # Yahoo usa BRK-B, no BRK.B
+    df = yf_ticker.history(period=period, interval=interval, auto_adjust=True)
+    if df is None or df.empty:
+        raise LookupError("sin_datos")
+    df = df.dropna(subset=["Close"])
+    intraday = interval.endswith("m")
+    puntos = []
+    for idx, row in df.iterrows():
+        vol = row.get("Volume")
+        puntos.append({
+            "t": idx.strftime("%Y-%m-%dT%H:%M") if intraday else idx.strftime("%Y-%m-%d"),
+            "o": round(float(row["Open"]), 4),
+            "h": round(float(row["High"]), 4),
+            "l": round(float(row["Low"]), 4),
+            "c": round(float(row["Close"]), 4),
+            "v": int(vol) if vol is not None and vol == vol else 0,  # vol == vol descarta NaN
+        })
+
+    # En 1D la variación se mide contra el cierre anterior, como Yahoo/Google
+    prev_close = None
+    if rango == "1d":
+        try:
+            daily = yf_ticker.history(period="5d", interval="1d", auto_adjust=True).dropna(subset=["Close"])
+            ultimo_dia = df.index[-1].date()
+            previos = daily[[d.date() < ultimo_dia for d in daily.index]]
+            if not previos.empty:
+                prev_close = round(float(previos["Close"].iloc[-1]), 4)
+        except Exception:
+            prev_close = None
+
+    data = {"ticker": ticker, "range": rango, "interval": interval, "intraday": intraday,
+            "prev_close": prev_close, "points": puntos, "fetched_at": ahora.isoformat()}
+    with _HISTORY_LOCK:
+        _HISTORY_CACHE[key] = {"data": data, "fetched_at": ahora}
+    return data
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
@@ -613,7 +686,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         else:
             m = re.match(r"^/api/sidi/candidates/([^/]+)$", path)
             c = re.match(r"^/api/sidi/analysis-cache/([^/]+)$", path)
+            h = re.match(r"^/api/history/([^/]+)$", path)
             if m: self.handle_sidi_candidate(unquote(m.group(1)))
+            elif h: self.handle_history(unquote(h.group(1)), query)
             elif c: self.handle_analysis_cache_get(unquote(c.group(1)))
             else: super().do_GET()
 
@@ -647,7 +722,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "endpoints": ["/status","/data","/market","/hot","/trigger","/mobile","/api/latest-csv",
             "/api/registro (GET/POST/DELETE)","/api/sidi/status","/api/sidi/market","/api/sidi/candidates",
             "/api/sidi/candidates/{ticker}","/api/sidi/work-packet","/api/sidi/analysis-cache (GET/POST)",
-            "/api/sidi/analysis-cache/{ticker}","/api/sidi/analysis-cache/save"],
+            "/api/sidi/analysis-cache/{ticker}","/api/sidi/analysis-cache/save","/api/history/{ticker}?range=1d|5d|1mo|6mo|ytd|1y|5y|max"],
         })
 
     def handle_status(self):
@@ -758,6 +833,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 duracion = (datetime.now() - inicio).total_seconds(); print(f"  ❌ Error en ingesta background tras {duracion:.0f}s: {e}", flush=True)
         threading.Thread(target=run_ingesta, daemon=True).start(); self.send_json({"ok": True, "message": "Actualización iniciada en background"})
+
+    def handle_history(self, ticker, query):
+        rango = (query.get("range", ["6mo"])[0] or "6mo").lower()
+        try:
+            self.send_json(get_price_history(ticker, rango))
+        except ValueError as e:
+            self.send_json({"error": str(e), "ranges": list(HISTORY_RANGES)}, status=400)
+        except LookupError as e:
+            self.send_json({"error": str(e), "ticker": ticker}, status=404)
+        except Exception as e:
+            print(f"  ⚠ Error descargando histórico de {ticker}: {e}", flush=True)
+            self.send_json({"error": "descarga_fallida", "detail": str(e)}, status=502)
 
     def handle_registro_get(self):
         if not turso_disponible(): self.send_json({"ok": False,"error": "turso_not_configured","message": "TURSO_DATABASE_URL / TURSO_AUTH_TOKEN no configuradas en el servidor."}, status=503); return
