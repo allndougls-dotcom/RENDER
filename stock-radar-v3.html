@@ -644,7 +644,16 @@ td { padding: 9px 12px; white-space: nowrap; }
 .pc-wrap .pc-range button.active { color: var(--pc-color, var(--accent)); border-bottom-color: var(--pc-color, var(--accent)); }
 .pc-canvas { position: relative; height: 240px; }
 .pc-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; color: var(--text2); padding: 0 20px; pointer-events: none; }
-@media (max-width: 600px) { .pc-canvas { height: 200px; } .pc-price { font-size: 20px; } }
+.pc-wrap .pc-toggles { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+.pc-wrap .pc-chip {
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 10px; color: var(--text2); font-family: 'DM Mono', monospace;
+  font-size: 10px; cursor: pointer; opacity: 0.6;
+}
+.pc-wrap .pc-chip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.pc-wrap .pc-chip.active { opacity: 1; color: var(--text); border-color: var(--border2); background: rgba(255,255,255,0.04); }
+.pc-wrap .pc-chip:disabled { opacity: 0.3; cursor: default; }
+@media (max-width: 600px) { .pc-canvas { height: 220px; } .pc-price { font-size: 20px; } }
 
 .modal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
 .modal-metric { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
@@ -2222,7 +2231,7 @@ function renderTable() {
       </td>
       <td style="color:${d.rsi<30?'var(--red)':d.rsi<40?'var(--amber)':'var(--text2)'}">${d.rsi}</td>
       <td style="color:var(--text2)">${d.pe > 0 ? d.pe.toFixed(1)+'x' : 'N/A'}</td>
-      <td class="target">${d.fcfYield.toFixed(1)}%</td>
+      <td style="color:${fcfYieldColor(d)}">${fmtFcfYield(d)}</td>
       <td>${setupLabel}</td>
       <td>${warnHTML}</td>
       <td><button class="btn btn-secondary" style="font-size:9px;padding:4px 8px" onclick="event.stopPropagation();openModal(allData.find(x=>x.ticker==='${d.ticker}'))">Ver →</button></td>
@@ -2363,6 +2372,15 @@ function enviarAIPreparator() {
 // ============================================================
 // MODAL
 // ============================================================
+// FCF Yield: "—" si el CSV no trae el dato; rojo si es negativo, verde si ≥ 4%
+function fmtFcfYield(d) {
+  return d.fcfYieldMissing || !Number.isFinite(d.fcfYield) ? '—' : d.fcfYield.toFixed(1) + '%';
+}
+function fcfYieldColor(d) {
+  if (d.fcfYieldMissing || !Number.isFinite(d.fcfYield)) return 'var(--text2)';
+  return d.fcfYield < 0 ? 'var(--red)' : d.fcfYield >= 4 ? 'var(--green)' : 'var(--text)';
+}
+
 function openModal(d) {
   const scorePct = (d.score / 10 * 100).toFixed(0);
   const growthPct = (d.growth / 10 * 100).toFixed(0);
@@ -2387,8 +2405,8 @@ function openModal(d) {
       <div class="modal-metric"><div class="modal-metric-label">Stop Loss (-5%)</div><div class="modal-metric-val" style="color:var(--red)">$${stopPrice}</div></div>
       <div class="modal-metric"><div class="modal-metric-label">Drawdown 60d</div><div class="modal-metric-val" style="color:var(--red)">-${d.drawdown60.toFixed(1)}%</div></div>
       <div class="modal-metric"><div class="modal-metric-label">RSI</div><div class="modal-metric-val" style="color:${d.rsi<30?'var(--red)':'var(--amber)'}">${d.rsi}</div></div>
-      <div class="modal-metric"><div class="modal-metric-label">FCF Yield</div><div class="modal-metric-val" style="color:var(--green)">${d.fcfYield.toFixed(1)}%</div></div>
-      <div class="modal-metric"><div class="modal-metric-label">Próx. Earnings</div><div class="modal-metric-val" style="color:${d.earningsDays >= 0 && d.earningsDays <= 7 ? 'var(--red)' : d.earningsDays <= 14 && d.earningsDays >= 0 ? 'var(--amber)' : 'var(--text2)'}">${d.earningsDays === 999 ? 'N/D' : d.earningsDays + 'd'}</div></div>
+      <div class="modal-metric"><div class="modal-metric-label">FCF Yield</div><div class="modal-metric-val" style="color:${fcfYieldColor(d)}">${fmtFcfYield(d)}</div></div>
+      <div class="modal-metric"><div class="modal-metric-label">Próx. Earnings</div><div class="modal-metric-val" style="color:${d.earningsDays >= 0 && d.earningsDays <= 7 ? 'var(--red)' : d.earningsDays <= 14 && d.earningsDays >= 0 ? 'var(--amber)' : 'var(--text2)'}">${Number.isFinite(d.earningsDays) && d.earningsDays !== 999 ? d.earningsDays + 'd' : 'N/D'}</div></div>
     </div>
 
     <div class="score-bar-wrap">
@@ -2417,7 +2435,12 @@ function openModal(d) {
   `;
 
   document.getElementById('modalOverlay').classList.add('open');
-  mountPriceChart(document.getElementById('modalPriceChart'), d.ticker);
+  mountPriceChart(document.getElementById('modalPriceChart'), d.ticker, {
+    levels: [
+      { label: 'Target', value: parseFloat(targetPrice), color: 'green' },
+      { label: 'Stop', value: parseFloat(stopPrice), color: 'red' },
+    ],
+  });
 }
 
 function closeModal(e) {
@@ -2899,7 +2922,7 @@ function buildJSONForCompany(d) {
       roe_pct:            num(d.roe),
       debt_equity:        num(d.debtEquity),
       fcf_ni_ratio:       num(d.fcfNetIncomeRatio),
-      fcf_yield_pct:      num(d.fcfYield),
+      fcf_yield_pct:      d.fcfYieldMissing ? null : num(d.fcfYield),
       revenue_growth_pct: num(d.revenueGrowth),
       eps_growth_pct:     num(d.epsGrowth),
       shares_yoy_pct:     num(d.sharesYoY),
@@ -4356,19 +4379,30 @@ function logoFallback(img) {
 }
 
 // ── Gráfico de precio de la ficha (estilo Yahoo / Google Finance) ──
-// mountPriceChart(contenedor, ticker) pinta cabecera con precio y variación,
-// selector de rango (1D … MAX) y un gráfico de área que se pone verde o rojo
-// según suba o baje en el periodo. Al pasar el ratón muestra el precio y la
-// variación de ese punto. Los datos salen de /api/history/{ticker} (servidor).
+// mountPriceChart(contenedor, ticker, { levels }) pinta cabecera con precio y
+// variación, selector de rango (1D … MAX) y un gráfico de área que se pone
+// verde o rojo según suba o baje en el periodo. Al pasar el ratón muestra el
+// precio y la variación de ese punto. Encima se pueden activar:
+//   · Target/Stop — líneas horizontales con los niveles que se le pasen
+//   · MA50/200    — medias móviles (las calcula el servidor)
+//   · Volumen     — barras en la parte baja, verdes o rojas según la vela
+// Los datos salen de /api/history/{ticker} (servidor).
 const PRICE_RANGES = [
   ['1d', '1D'], ['5d', '5D'], ['1mo', '1M'], ['6mo', '6M'],
   ['ytd', 'YTD'], ['1y', '1A'], ['5y', '5A'], ['max', 'MÁX'],
 ];
 const PRICE_RANGE_LABELS = { '1d': 'hoy', '5d': '5 días', '1mo': '1 mes', '6mo': '6 meses', 'ytd': 'en el año', '1y': '1 año', '5y': '5 años', 'max': 'desde el inicio' };
+const PRICE_OVERLAYS = [['levels', 'Target/Stop'], ['ma', 'MA50/200'], ['vol', 'Volumen']];
+const PRICE_MA_COLORS = { ma50: '#f59e0b', ma200: '#3b82f6' };
 const __priceCharts = {};
 const __priceHistCache = {};
 
-function mountPriceChart(container, ticker) {
+function getPriceOverlays() {
+  const def = { levels: true, ma: true, vol: true };
+  try { return Object.assign(def, JSON.parse(localStorage.getItem('priceChartOverlays') || '{}')); } catch (e) { return def; }
+}
+
+function mountPriceChart(container, ticker, opts = {}) {
   if (!container || !ticker) return;
   // Libera los gráficos de fichas anteriores que ya no están en pantalla
   Object.keys(__priceCharts).forEach(k => { if (!document.getElementById(k)) destroyPriceChart(k); });
@@ -4376,19 +4410,32 @@ function mountPriceChart(container, ticker) {
   let rango = '6mo';
   try { rango = localStorage.getItem('priceChartRange') || '6mo'; } catch (e) {}
   if (!PRICE_RANGES.some(r => r[0] === rango)) rango = '6mo';
+  const levels = (opts.levels || []).filter(l => Number.isFinite(l.value) && l.value > 0);
 
   container.innerHTML = `
     <div class="pc-wrap" id="${id}">
       <div class="pc-head"><span class="pc-price">—</span><span class="pc-change"></span><span class="pc-when"></span></div>
       <div class="pc-range">${PRICE_RANGES.map(([k, l]) => `<button type="button" data-range="${k}">${l}</button>`).join('')}</div>
+      <div class="pc-toggles">${PRICE_OVERLAYS.filter(([k]) => k !== 'levels' || levels.length).map(([k, l]) =>
+        `<button type="button" class="pc-chip" data-overlay="${k}"><i></i>${l}</button>`).join('')}</div>
       <div class="pc-canvas"><canvas></canvas><div class="pc-msg">Cargando gráfico…</div></div>
     </div>`;
   const root = container.querySelector('#' + id);
+  root.__levels = levels;
   root.querySelectorAll('.pc-range button').forEach(b => {
     b.onclick = (ev) => {
       ev.stopPropagation();
       try { localStorage.setItem('priceChartRange', b.dataset.range); } catch (e) {}
       loadPriceChart(root, ticker, b.dataset.range);
+    };
+  });
+  root.querySelectorAll('.pc-chip').forEach(b => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const ov = getPriceOverlays();
+      ov[b.dataset.overlay] = !ov[b.dataset.overlay];
+      try { localStorage.setItem('priceChartOverlays', JSON.stringify(ov)); } catch (e) {}
+      if (root.__data) renderPriceChart(root, root.__data);
     };
   });
   loadPriceChart(root, ticker, rango);
@@ -4411,6 +4458,7 @@ async function loadPriceChart(root, ticker, rango) {
     } catch (e) {
       if (root.dataset.req !== rango) return;
       destroyPriceChart(root.id);
+      root.__data = null;
       msg.textContent = location.protocol === 'file:'
         ? 'El gráfico necesita abrir la app desde el servidor (INICIAR.bat o Render).'
         : 'No se pudo cargar el gráfico: ' + e.message;
@@ -4426,6 +4474,7 @@ function destroyPriceChart(id) {
 }
 
 function renderPriceChart(root, data) {
+  root.__data = data;
   const msg = root.querySelector('.pc-msg');
   const pts = (data.points || []).filter(p => p.c != null);
   if (!pts.length) { msg.textContent = 'Sin datos de precio para este rango'; return; }
@@ -4437,12 +4486,30 @@ function renderPriceChart(root, data) {
   const red = css.getPropertyValue('--red').trim() || '#ef4444';
   const grid = css.getPropertyValue('--border').trim() || '#1e2235';
   const muted = css.getPropertyValue('--text2').trim() || '#7880a0';
+  const alpha = (hex, a) => /^#[0-9a-f]{6}$/i.test(hex) ? hex + a : hex;
 
   const base = data.prev_close ?? pts[0].c;
   const last = pts[pts.length - 1].c;
   const up = last >= base;
   const color = up ? green : red;
   root.style.setProperty('--pc-color', color);
+
+  // Capas activas (y cuáles tienen datos en este rango)
+  const ov = getPriceOverlays();
+  const levels = root.__levels || [];
+  const hasMa = !!data.ma && pts.some(p => p.ma50 != null || p.ma200 != null);
+  const hasVol = pts.some(p => p.v > 0);
+  const show = { levels: ov.levels && levels.length > 0, ma: ov.ma && hasMa, vol: ov.vol && hasVol };
+  const chipColor = { levels: green, ma: PRICE_MA_COLORS.ma50, vol: muted };
+  root.querySelectorAll('.pc-chip').forEach(b => {
+    const k = b.dataset.overlay;
+    const disponible = k === 'ma' ? hasMa : k === 'vol' ? hasVol : true;
+    b.classList.toggle('active', !!ov[k] && disponible);
+    b.disabled = !disponible;
+    b.title = disponible ? '' : (k === 'ma' ? 'Medias móviles no disponibles en este rango' : 'Sin datos de volumen');
+    b.querySelector('i').style.background = k === 'ma'
+      ? `linear-gradient(90deg, ${PRICE_MA_COLORS.ma50} 50%, ${PRICE_MA_COLORS.ma200} 50%)` : chipColor[k];
+  });
 
   const fmtDate = (t, largo) => {
     const d = new Date(data.intraday ? t : t + 'T12:00:00');
@@ -4454,6 +4521,7 @@ function renderPriceChart(root, data) {
     return d.toLocaleDateString('es-ES', opts);
   };
   const fmtPrice = v => '$' + v.toFixed(2); // mismo formato que el resto de la app ($185.20)
+  const fmtVol = v => v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(0) + 'K' : String(v);
 
   const head = root.querySelector('.pc-head');
   const setHead = (precio, t, hover) => {
@@ -4472,15 +4540,35 @@ function renderPriceChart(root, data) {
   const ctx = canvas.getContext('2d');
   const h = canvas.parentElement.clientHeight || 240;
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, color + '55');
-  grad.addColorStop(1, color + '00');
+  grad.addColorStop(0, alpha(color, '55'));
+  grad.addColorStop(1, alpha(color, '00'));
 
+  const flat = v => pts.map(() => v);
   const datasets = [{
-    data: pts.map(p => p.c), borderColor: color, backgroundColor: grad, fill: 'start',
-    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: color, tension: 0,
+    pcMain: true, data: pts.map(p => p.c), borderColor: color, backgroundColor: grad, fill: 'start',
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: color, tension: 0, order: 0,
   }];
   if (data.prev_close != null) {
-    datasets.push({ data: pts.map(() => data.prev_close), borderColor: muted, borderDash: [4, 4], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, fill: false });
+    datasets.push({ data: flat(data.prev_close), borderColor: muted, borderDash: [4, 4], borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, fill: false, order: 3 });
+  }
+  if (show.ma) {
+    [['ma50', 'MA50'], ['ma200', 'MA200']].forEach(([k]) => datasets.push({
+      data: pts.map(p => p[k]), borderColor: PRICE_MA_COLORS[k], borderWidth: 1.3, pointRadius: 0, pointHoverRadius: 0,
+      fill: false, spanGaps: true, tension: 0, order: 1,
+    }));
+  }
+  if (show.levels) {
+    levels.forEach(l => datasets.push({
+      data: flat(l.value), borderColor: l.color === 'red' ? red : green, borderDash: [6, 4], borderWidth: 1.2,
+      pointRadius: 0, pointHoverRadius: 0, fill: false, order: 2,
+    }));
+  }
+  const maxVol = Math.max(1, ...pts.map(p => p.v || 0));
+  if (show.vol) {
+    datasets.push({
+      type: 'bar', yAxisID: 'yv', data: pts.map(p => p.v || 0), order: 10, barPercentage: 1, categoryPercentage: 0.9,
+      backgroundColor: pts.map((p, i) => alpha((i === 0 ? p.c >= (p.o ?? p.c) : p.c >= pts[i - 1].c) ? green : red, '40')),
+    });
   }
 
   // Línea vertical que sigue al ratón, como en Yahoo/Google
@@ -4494,23 +4582,72 @@ function renderPriceChart(root, data) {
       c.lineWidth = 1; c.strokeStyle = muted; c.setLineDash([3, 3]); c.stroke(); c.restore();
     }
   };
+  // Etiqueta "Target $69.79" / "Stop $62.25" pegada a cada línea de nivel
+  const levelLabels = {
+    id: 'pcLevelLabels',
+    afterDatasetsDraw(chart) {
+      if (!show.levels) return;
+      const c = chart.ctx, y = chart.scales.y, { left, top, bottom } = chart.chartArea;
+      c.save(); c.font = '600 9px "DM Mono", monospace'; c.textBaseline = 'middle';
+      levels.forEach(l => {
+        const py = y.getPixelForValue(l.value);
+        if (py < top || py > bottom) return;
+        const txt = `${l.label} ${fmtPrice(l.value)}`, w = c.measureText(txt).width + 10;
+        const col = l.color === 'red' ? red : green;
+        c.fillStyle = 'rgba(10,12,20,0.85)'; c.fillRect(left + 4, py - 8, w, 16);
+        c.strokeStyle = col; c.lineWidth = 1; c.setLineDash([]); c.strokeRect(left + 4, py - 8, w, 16);
+        c.fillStyle = col; c.fillText(txt, left + 9, py);
+      });
+      c.restore();
+    }
+  };
+
+  // Eje X: etiquetas cortas y sin solaparse (en móvil caben menos).
+  // En 5D se marca solo el cambio de día, como hace Google Finance.
+  const estrecho = (canvas.parentElement.clientWidth || 600) < 480;
+  const xTicks = { color: muted, font: { family: 'DM Mono', size: 9 }, maxRotation: 0 };
+  if (data.range === '5d') {
+    const dia = t => t.slice(0, 10);
+    Object.assign(xTicks, {
+      autoSkip: false,
+      callback: (v, i) => (i === 0 || dia(pts[i].t) !== dia(pts[i - 1].t))
+        ? new Date(pts[i].t).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : null,
+    });
+  } else {
+    Object.assign(xTicks, { autoSkip: true, autoSkipPadding: 16, maxTicksLimit: estrecho ? 4 : 6 });
+  }
+
+  const scales = {
+    x: { grid: { display: false }, ticks: xTicks },
+    y: { position: 'right', grid: { color: grid }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, callback: v => '$' + v } },
+  };
+  // El volumen ocupa solo el cuarto inferior: su eje llega a 4× el máximo
+  if (show.vol) scales.yv = { display: false, min: 0, max: maxVol * 4, grid: { display: false } };
 
   __priceCharts[root.id] = new Chart(ctx, {
     type: 'line',
     data: { labels: pts.map(p => fmtDate(p.t, false)), datasets },
-    plugins: [crosshair],
+    plugins: [crosshair, levelLabels],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          filter: item => item.datasetIndex === 0,
+          filter: item => !!item.dataset.pcMain,
           displayColors: false, backgroundColor: 'rgba(10,12,20,0.92)', borderColor: grid, borderWidth: 1,
           titleFont: { family: 'DM Mono', size: 10 }, bodyFont: { family: 'DM Mono', size: 12, weight: 'bold' },
+          footerFont: { family: 'DM Mono', size: 10, weight: 'normal' }, footerColor: muted,
           callbacks: {
             title: items => fmtDate(pts[items[0].dataIndex].t, true),
             label: item => fmtPrice(item.parsed.y),
+            footer: items => {
+              const p = pts[items[0].dataIndex], out = [];
+              if (show.ma && p.ma50 != null) out.push('MA50  ' + fmtPrice(p.ma50));
+              if (show.ma && p.ma200 != null) out.push('MA200 ' + fmtPrice(p.ma200));
+              if (show.vol && p.v) out.push('Vol   ' + fmtVol(p.v));
+              return out;
+            },
           },
         },
       },
@@ -4518,10 +4655,7 @@ function renderPriceChart(root, data) {
         if (els && els.length) { const p = pts[els[0].index]; setHead(p.c, p.t, true); }
         else setHead(last, pts[pts.length - 1].t, false);
       },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, maxRotation: 0, autoSkip: true } },
-        y: { position: 'right', grid: { color: grid }, ticks: { color: muted, font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 6, callback: v => '$' + v } },
-      },
+      scales,
     },
   });
   canvas.onmouseleave = () => setHead(last, pts[pts.length - 1].t, false);
@@ -4784,7 +4918,8 @@ function processCSVRows(data, filename) {
     drawdown60:        Math.abs(parseFloat(r.drawdown_60d || r.drawdown60 || r.dd60 || 0)),
     rsi:               parseFloat(r.rsi_14 || r.rsi || r.RSI || 50),
     pe:                parseFloat(r.pe || r.PE || 0),
-    fcfYield:          pct(r.fcf_yield || r.fcfYield, 'fcf_yield'),
+    fcfYield:          pct(r.fcf_yield || r.fcf_yield_calc || r.fcfYield, 'fcf_yield'),
+    fcfYieldMissing:   [r.fcf_yield, r.fcf_yield_calc, r.fcfYield].every(v => v === undefined || v === null || String(v).trim() === '' || String(v).toLowerCase() === 'nan'),
     revenueGrowth:     pct(r.revenue_growth || r.revenueGrowth, 'revenue_growth'),
     epsGrowth:         pct(r.eps_growth || r.epsGrowth, 'eps_growth'),
     debtEquity:        parseFloat(r.debt_equity || r.debtEquity || 0),

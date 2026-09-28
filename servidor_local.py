@@ -607,6 +607,13 @@ HISTORY_RANGES = {
 _HISTORY_CACHE = {}
 _HISTORY_LOCK = threading.Lock()
 
+# Medias móviles del gráfico. Necesitan histórico previo al rango visible
+# (200 sesiones ≈ 290 días naturales), así que en estos rangos se descarga
+# desde "inicio del rango - margen" y luego se recorta. En 5A las velas son
+# semanales: 10 y 40 semanas equivalen a las medias de 50 y 200 sesiones.
+HISTORY_MA_DIAS_VISIBLES = {"1mo": 31, "6mo": 183, "1y": 366, "5y": 5 * 365 + 2}
+HISTORY_MA_MARGEN_DIAS = 310
+
 
 def get_price_history(ticker, rango="6mo"):
     ticker = (ticker or "").strip().upper()
@@ -623,16 +630,41 @@ def get_price_history(ticker, rango="6mo"):
             return hit["data"]
 
     import yfinance as yf
+    import pandas as pd
     yf_ticker = yf.Ticker(ticker.replace(".", "-"))  # Yahoo usa BRK-B, no BRK.B
-    df = yf_ticker.history(period=period, interval=interval, auto_adjust=True)
+
+    con_ma = rango in HISTORY_MA_DIAS_VISIBLES or rango == "ytd"
+    if con_ma:
+        inicio = (datetime(ahora.year, 1, 1) if rango == "ytd"
+                  else ahora - pd.Timedelta(days=HISTORY_MA_DIAS_VISIBLES[rango]))
+        df = yf_ticker.history(start=(inicio - pd.Timedelta(days=HISTORY_MA_MARGEN_DIAS)).strftime("%Y-%m-%d"),
+                               interval=interval, auto_adjust=True)
+    else:
+        df = yf_ticker.history(period=period, interval=interval, auto_adjust=True)
     if df is None or df.empty:
         raise LookupError("sin_datos")
     df = df.dropna(subset=["Close"])
+
+    ma = None
+    if con_ma:
+        rapida, lenta = (10, 40) if interval == "1wk" else (50, 200)
+        df = df.assign(ma_fast=df["Close"].rolling(rapida).mean(), ma_slow=df["Close"].rolling(lenta).mean())
+        corte = pd.Timestamp(inicio)
+        corte = corte.tz_localize(df.index.tz) if df.index.tz is not None else corte
+        df = df[df.index >= corte]
+        if df.empty:
+            raise LookupError("sin_datos")
+        ma = {"fast": 50, "slow": 200, "bars": [rapida, lenta], "interval": interval}
+
+    def _num(v):
+        return round(float(v), 4) if v is not None and v == v else None
+
     intraday = interval.endswith("m")
     puntos = []
     for idx, row in df.iterrows():
         vol = row.get("Volume")
-        puntos.append({
+        extra = {"ma50": _num(row.get("ma_fast")), "ma200": _num(row.get("ma_slow"))} if con_ma else {}
+        puntos.append({**extra,
             "t": idx.strftime("%Y-%m-%dT%H:%M") if intraday else idx.strftime("%Y-%m-%d"),
             "o": round(float(row["Open"]), 4),
             "h": round(float(row["High"]), 4),
@@ -654,7 +686,7 @@ def get_price_history(ticker, rango="6mo"):
             prev_close = None
 
     data = {"ticker": ticker, "range": rango, "interval": interval, "intraday": intraday,
-            "prev_close": prev_close, "points": puntos, "fetched_at": ahora.isoformat()}
+            "prev_close": prev_close, "ma": ma, "points": puntos, "fetched_at": ahora.isoformat()}
     with _HISTORY_LOCK:
         _HISTORY_CACHE[key] = {"data": data, "fetched_at": ahora}
     return data
