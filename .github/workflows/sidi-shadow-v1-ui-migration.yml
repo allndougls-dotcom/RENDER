@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/apply_sidi_shadow_v1_ui_migration.py'
+      - 'scripts/apply_sidi_shadow_v1_ui_migration_v2.py'
       - '.github/workflows/sidi-shadow-v1-ui-migration.yml'
   workflow_dispatch:
 
@@ -23,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply deterministic migration
-        run: python scripts/apply_sidi_shadow_v1_ui_migration.py
+        run: python scripts/apply_sidi_shadow_v1_ui_migration_v2.py
       - name: Syntax-check server
         run: python -m py_compile servidor_local.py
       - name: Validate migrated markers
