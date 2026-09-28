@@ -1,9 +1,19 @@
 """Score fundamental normalizado por sector + Warning Signs.
 
-Nota sobre escala yFinance:
-- returnOnEquity, revenueGrowth, earningsGrowth → DECIMAL (0.15 = 15%)
-- debtToEquity, trailingPE, priceToBook, currentRatio → escala normal
-- freeCashflow, netIncomeToCommon → dólares absolutos
+SIDI_SHADOW_V1
+---------------
+``full_setup`` representa desde esta versión la estrategia congelada tras la
+validación 2023-2026:
+
+- DD60 >= 12% (sobre máximo de cierre de 60 sesiones)
+- RSI14 < 40
+- histograma MACD mejorando vs sesión anterior
+- volumen medio 5d < volumen medio 60d
+- fund_score live >= 6.5
+- SPY20 <= +1%
+- AbnormalReturn20 <= -10%
+
+La selección legacy se conserva en ``legacy_full_setup`` sólo para auditoría.
 """
 
 import sys
@@ -11,12 +21,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# Aseguramos que la carpeta de este archivo (modules/ingesta/) esté en el path,
-# independientemente de cómo el script que importa scoring.py haya configurado
-# sys.path. Sin esto, "from sector_context import ..." puede fallar en silencio
-# cuando scoring.py se invoca desde main_ingesta.py (que solo añade modules/,
-# no modules/ingesta/), cayendo al fallback y dejando sector_context en null
-# para TODAS las filas sin ningún error visible en consola.
 _THIS_DIR = str(Path(__file__).resolve().parent)
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
@@ -28,13 +32,19 @@ except ImportError as e:
     def get_sector_context(ticker, sector):
         return {"sector_etf": None, "subsector": None, "peer_group": [], "critical_macro_variables": []}
 
-# Plan operativo candidato. En esta rama experimental NO decide qué empresa
-# es setup; sólo añade campos explícitos de ejecución al export.
 try:
     from sidi_trade_plan import add_indicative_trade_plan
 except ImportError:
     def add_indicative_trade_plan(df):
         return df
+
+
+SIDI_STRATEGY_VERSION = "SIDI_SHADOW_V1"
+SIDI_MIN_FUND_SCORE = 6.5
+SIDI_MIN_DD60 = 12.0
+SIDI_MAX_RSI = 40.0
+SIDI_MAX_SPY20 = 1.0
+SIDI_MAX_ABNORMAL20 = -10.0
 
 SCORE_COLS = ["revenue_growth", "eps_growth", "roe", "debt_equity",
               "pe", "pb", "current_ratio"]
@@ -132,6 +142,21 @@ def _warnings(row: pd.Series) -> str:
     return "|".join(w) if w else "OK"
 
 
+def _gate_failures(row: pd.Series) -> str:
+    failures = []
+    if not bool(row.get("sidi_pass_dd12", False)): failures.append("DD12")
+    if not bool(row.get("sidi_pass_rsi40", False)): failures.append("RSI40")
+    if not bool(row.get("sidi_pass_macd", False)): failures.append("MACD")
+    if not bool(row.get("sidi_pass_volume", False)): failures.append("VOLUME")
+    if not bool(row.get("sidi_pass_fund65", False)): failures.append("FUND65")
+    if not bool(row.get("sidi_context_ready", False)):
+        failures.append("CONTEXT_MISSING")
+    else:
+        if not bool(row.get("sidi_pass_spy20", False)): failures.append("SPY20")
+        if not bool(row.get("sidi_pass_abnormal20", False)): failures.append("ABNORMAL20")
+    return "OK" if not failures else "|".join(failures)
+
+
 def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame,
                     df_fund: pd.DataFrame) -> pd.DataFrame:
 
@@ -155,32 +180,67 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame,
         df.get("tech_score", pd.Series(5.0, index=df.index)).fillna(5) * 0.40
     ).round(2)
 
-    # ── CANDIDATA EXPERIMENTAL SIDI ───────────────────────────────────────
-    # Backtests corregidos T+1 + costes + validación temporal + PIT proxy:
-    # fund_score>=6.5, DD60>=12%, RSI<40, MACD mejorando y volumen decreciente.
-    # `setup_hot` ya contiene RSI/MACD/volumen; aquí endurecemos DD a 12%.
-    # Se elimina la exclusión sectorial fija: no está presente en la candidata
-    # validada. Esto vive sólo en la rama experimental hasta aprobación.
-    if all(c in df.columns for c in ["fund_score", "drawdown_60d", "setup_hot"]):
-        df["full_setup"] = (
-            (df["fund_score"]   >= 6.5) &
-            (df["drawdown_60d"] <= -12) &
-            (df["setup_hot"]    == True)
-        )
-    else:
-        df["full_setup"] = False
+    # ── SIDI_SHADOW_V1: puertas explícitas y auditables ────────────────
+    df["sidi_strategy_version"] = SIDI_STRATEGY_VERSION
+
+    # Garantizar columnas aunque una ingesta parcial no haya calculado técnico/contexto.
+    for col, default in [
+        ("setup_hot", False), ("setup_hot_legacy", False),
+        ("sidi_context_ready", False), ("sidi_pass_dd12", False),
+        ("sidi_pass_rsi40", False), ("sidi_pass_macd", False),
+        ("sidi_pass_volume", False),
+    ]:
+        if col not in df.columns:
+            df[col] = default
+
+    if "spy_return_20d" not in df.columns:
+        df["spy_return_20d"] = np.nan
+    if "abnormal_return_20d" not in df.columns:
+        df["abnormal_return_20d"] = np.nan
+
+    df["sidi_pass_fund65"] = df.get("fund_score", pd.Series(np.nan, index=df.index)) >= SIDI_MIN_FUND_SCORE
+    df["sidi_pass_spy20"] = (
+        df["sidi_context_ready"].fillna(False).astype(bool) &
+        (pd.to_numeric(df["spy_return_20d"], errors="coerce") <= SIDI_MAX_SPY20)
+    )
+    df["sidi_pass_abnormal20"] = (
+        df["sidi_context_ready"].fillna(False).astype(bool) &
+        (pd.to_numeric(df["abnormal_return_20d"], errors="coerce") <= SIDI_MAX_ABNORMAL20)
+    )
+    df["sidi_pass_technical"] = df["setup_hot"].fillna(False).astype(bool)
+
+    df["full_setup"] = (
+        df["sidi_pass_technical"] &
+        df["sidi_pass_fund65"] &
+        df["sidi_pass_spy20"] &
+        df["sidi_pass_abnormal20"]
+    )
+    # Nombre explícito para nuevas pantallas; full_setup se conserva por compatibilidad.
+    df["sidi_full_setup"] = df["full_setup"]
+    df["sidi_gate_failures"] = df.apply(_gate_failures, axis=1)
+
+    # LEGACY: aproximación exacta de la lógica productiva previa al Shadow V1.
+    # Sólo auditoría: no debe usarse para nuevas entradas.
+    legacy_sector_ok = ~df.get("sector", pd.Series("", index=df.index)).isin(
+        ["Financials", "Communication Services"]
+    )
+    df["legacy_full_setup"] = (
+        (df.get("fund_score", pd.Series(np.nan, index=df.index)) >= 6.5) &
+        df["setup_hot_legacy"].fillna(False).astype(bool) &
+        legacy_sector_ok
+    )
 
     def horizon(row):
         if pd.isna(row.get("rsi_14")): return "N/A"
         if bool(row.get("full_setup", False)):
-            return "SIDI: max 7 sesiones"
+            return "SIDI_SHADOW_V1: max 7 sesiones"
         if row["rsi_14"] < 30 and row.get("near_support") and row.get("macd_improving"): return "5-10d"
         bias = row.get("trend_bias", "")
         return "10-18d" if bias == "ALCISTA" else ("3-7d" if bias == "BAJISTA" else "7-15d")
 
     df["horizon"] = df.apply(horizon, axis=1)
 
-    # ── Contexto sectorial (ETF, peers, macro vars) — para el analizador de noticias ──
+    # ── Contexto sectorial (ETF, peers, macro vars) ──────────────────
     def _sector_ctx(row):
         ctx = get_sector_context(row.get("ticker", ""), row.get("sector", ""))
         return pd.Series({
@@ -193,25 +253,28 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame,
     sector_ctx_df = df.apply(_sector_ctx, axis=1)
     df = pd.concat([df, sector_ctx_df], axis=1)
 
-    # Añade plan indicativo desde el cierre T. El TP/SL ejecutable exacto se fija
-    # cuando se conoce el Open T+1, tal como hace el backtest.
+    # Plan indicativo desde cierre T. El plan exacto se fija con Open T+1.
     df = add_indicative_trade_plan(df)
 
-    df = df.sort_values("combined_score", ascending=False).reset_index(drop=True)
+    # FULL primero; después score combinado para mantener una lectura útil del scanner.
+    df = df.sort_values(["full_setup", "combined_score"], ascending=[False, False]).reset_index(drop=True)
 
-    setups = df["full_setup"].sum()
-    print(f"  ✅ Scoring completado")
+    setups = int(df["full_setup"].sum())
+    legacy_setups = int(df["legacy_full_setup"].sum())
+    print(f"  ✅ Scoring completado · {SIDI_STRATEGY_VERSION}")
     print(f"     Score combinado medio : {df['combined_score'].mean():.2f}/10")
     print(f"     Fund score medio      : {df['fund_score'].mean():.2f}/10")
-    print(f"     Setups completos      : {setups}")
+    print(f"     FULL Shadow V1        : {setups}")
+    print(f"     FULL legacy (audit)   : {legacy_setups}")
 
-    cols = ["ticker", "sector", "fund_score", "tech_score", "combined_score", "drawdown_60d", "rsi_14"]
+    cols = ["ticker", "sector", "fund_score", "combined_score", "drawdown_60d", "rsi_14",
+            "spy_return_20d", "abnormal_return_20d"]
     cols = [c for c in cols if c in df.columns]
     if setups > 0:
-        print(f"\n  📊 Top setups:")
+        print(f"\n  📊 FULL SIDI_SHADOW_V1:")
         print(df[df["full_setup"] == True][cols].head(10).to_string(index=False))
     else:
-        print(f"\n  📊 Top 10 por score combinado:")
+        print(f"\n  📊 Sin FULL hoy · Top 10 por score combinado:")
         print(df[cols].head(10).to_string(index=False))
 
     return df
