@@ -653,6 +653,7 @@ td { padding: 9px 12px; white-space: nowrap; }
 .pc-wrap .pc-chip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 .pc-wrap .pc-chip.active { opacity: 1; color: var(--text); border-color: var(--border2); background: rgba(255,255,255,0.04); }
 .pc-wrap .pc-chip:disabled { opacity: 0.3; cursor: default; }
+.pc-wrap .pc-next { font-size: 10px; align-self: center; margin-left: auto; white-space: nowrap; }
 @media (max-width: 600px) { .pc-canvas { height: 220px; } .pc-price { font-size: 20px; } }
 
 .modal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
@@ -1558,8 +1559,8 @@ body::before {
     </div>
     <div class="filter-group" style="display:flex;align-items:center;gap:6px">
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
-        <input type="checkbox" id="fHotOnly" onchange="updateFilters()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer">
-        <span style="color:var(--accent);font-weight:600">🔥 Solo HOT</span>
+        <input type="checkbox" id="fFullOnly" onchange="updateFilters()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer">
+        <span style="color:var(--accent);font-weight:600" title="SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12 · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1 · Abnormal20≤-10">🎯 Solo FULL SETUP</span>
       </label>
     </div>
     <div class="filter-group" style="display:flex;align-items:center;gap:6px">
@@ -2136,7 +2137,7 @@ function updateFilters() {
   const minScore = parseFloat(document.getElementById('fScore').value);
   const minDD = parseFloat(document.getElementById('fDD').value);
   const sector = document.getElementById('fSector').value;
-  const hotOnly = document.getElementById('fHotOnly').checked;
+  const fullOnly = document.getElementById('fFullOnly').checked;
   const noWarnOnly = document.getElementById('fNoWarnOnly').checked;
   document.getElementById('fScoreVal').textContent = minScore.toFixed(1);
   document.getElementById('fDDVal').textContent = minDD + '%';
@@ -2145,7 +2146,7 @@ function updateFilters() {
     d.score >= minScore &&
     d.drawdown60 >= minDD &&
     (sector === '' || d.sector === sector) &&
-    (!hotOnly || d.setupHot === true) &&
+    (!fullOnly || d.fullSetup === true) &&
     (!noWarnOnly || (d.warningCount || 0) === 0)
   );
 
@@ -2158,7 +2159,7 @@ function resetFilters() {
   document.getElementById('fScore').value = 6.5;
   document.getElementById('fDD').value = 12;
   document.getElementById('fSector').value = '';
-  document.getElementById('fHotOnly').checked = false;
+  document.getElementById('fFullOnly').checked = false;
   document.getElementById('fNoWarnOnly').checked = false;
   updateFilters();
 }
@@ -2171,8 +2172,7 @@ function sortTable(col) {
 
 function renderStats() {
   const full = filteredData.filter(d => d.fullSetup === true);
-  const hot = filteredData.filter(d => d.setupHot === true);
-  const hotNoWarn = filteredData.filter(d => d.setupHot === true && (d.warningCount || 0) === 0);
+  const fullNoWarn = full.filter(d => (d.warningCount || 0) === 0);
   const avgScore = filteredData.length ? (filteredData.reduce((a,b) => a+b.score,0)/filteredData.length).toFixed(1) : 0;
   const avgDD = filteredData.length ? (filteredData.reduce((a,b) => a+b.drawdown60,0)/filteredData.length).toFixed(1) : 0;
   const warns = filteredData.filter(d => (d.warningCount || 0) > 0).length;
@@ -2194,7 +2194,7 @@ function renderStats() {
     <div class="stat-card blue"><div class="stat-label">Score Promedio</div><div class="stat-val" style="color:var(--blue)">${avgScore}</div><div class="stat-sub">sobre 10</div></div>
     <div class="stat-card purple"><div class="stat-label">Drawdown Medio</div><div class="stat-val" style="color:var(--purple)">${avgDD}%</div><div class="stat-sub">caída desde máx 60d</div></div>
     <div class="stat-card red"><div class="stat-label">Con Warnings</div><div class="stat-val" style="color:var(--red)">${warns}</div><div class="stat-sub">revisar antes de operar</div></div>
-    <div class="stat-card green"><div class="stat-label">HOT sin warning</div><div class="stat-val" style="color:var(--green)">${hotNoWarn.length}</div><div class="stat-sub">señal más limpia</div></div>
+    <div class="stat-card green"><div class="stat-label">FULL SETUP sin warning</div><div class="stat-val" style="color:var(--green)">${fullNoWarn.length}</div><div class="stat-sub">señal más limpia</div></div>
   `;
 }
 
@@ -4393,14 +4393,35 @@ const PRICE_RANGES = [
   ['ytd', 'YTD'], ['1y', '1A'], ['5y', '5A'], ['max', 'MÁX'],
 ];
 const PRICE_RANGE_LABELS = { '1d': 'hoy', '5d': '5 días', '1mo': '1 mes', '6mo': '6 meses', 'ytd': 'en el año', '1y': '1 año', '5y': '5 años', 'max': 'desde el inicio' };
-const PRICE_OVERLAYS = [['levels', 'Target/Stop'], ['ma', 'MA50/200'], ['vol', 'Volumen']];
+const PRICE_OVERLAYS = [['levels', 'Target/Stop'], ['ma', 'MA50/200'], ['vol', 'Volumen'], ['events', 'Eventos']];
+const PRICE_SIGNAL_COLORS = { WIN: '#22c55e', LOSS: '#ef4444', EXPIRED: '#7880a0', PENDING: '#3b82f6' };
+const PRICE_EARNINGS_COLOR = '#f59e0b';
 const PRICE_MA_COLORS = { ma50: '#f59e0b', ma200: '#3b82f6' };
 const __priceCharts = {};
 const __priceHistCache = {};
 
 function getPriceOverlays() {
-  const def = { levels: true, ma: true, vol: true };
+  const def = { levels: true, ma: true, vol: true, events: true };
   try { return Object.assign(def, JSON.parse(localStorage.getItem('priceChartOverlays') || '{}')); } catch (e) { return def; }
+}
+
+// Eventos que se marcan en el gráfico: últimos resultados (línea vertical),
+// próximos resultados (aviso bajo las pastillas) y señales del Registro
+// (punto en el precio de entrada, coloreado por cómo acabaron).
+function priceChartEvents(ticker) {
+  const t = String(ticker || '').toUpperCase();
+  const d = (typeof allData !== 'undefined' && Array.isArray(allData)) ? allData.find(x => String(x.ticker).toUpperCase() === t) : null;
+  const esFecha = v => /^\d{4}-\d{2}-\d{2}/.test(String(v || ''));
+  const earnings = d && esFecha(d.latestEarningsDate) ? [String(d.latestEarningsDate).slice(0, 10)] : [];
+  const next = d && esFecha(d.earningsDate) && Number.isFinite(d.earningsDays) && d.earningsDays !== 999 && d.earningsDays >= 0
+    ? { date: String(d.earningsDate).slice(0, 10), days: d.earningsDays } : null;
+  let signals = [];
+  try {
+    const reg = typeof loadRegistro === 'function' ? loadRegistro() : [];
+    signals = reg.filter(r => String(r.ticker).toUpperCase() === t && esFecha(r.fechaDeteccion))
+      .map(r => ({ date: String(r.fechaDeteccion).slice(0, 10), price: parseFloat(r.precioEntrada), estado: r.estado || 'PENDING', pnlPct: r.pnlPct }));
+  } catch (e) {}
+  return { earnings, next, signals };
 }
 
 function mountPriceChart(container, ticker, opts = {}) {
@@ -4412,17 +4433,24 @@ function mountPriceChart(container, ticker, opts = {}) {
   try { rango = localStorage.getItem('priceChartRange') || '6mo'; } catch (e) {}
   if (!PRICE_RANGES.some(r => r[0] === rango)) rango = '6mo';
   const levels = (opts.levels || []).filter(l => Number.isFinite(l.value) && l.value > 0);
+  const events = priceChartEvents(ticker);
+  const hayEventos = events.earnings.length > 0 || events.signals.length > 0;
+  const fmtCorta = f => new Date(f + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  const nextHTML = events.next
+    ? `<span class="pc-next" style="color:${events.next.days <= 7 ? 'var(--red)' : events.next.days <= 14 ? 'var(--amber)' : 'var(--text2)'}">📅 Próx. resultados: ${fmtCorta(events.next.date)} · ${events.next.days === 0 ? 'hoy' : 'en ' + events.next.days + ' días'}</span>`
+    : '';
 
   container.innerHTML = `
     <div class="pc-wrap" id="${id}">
       <div class="pc-head"><span class="pc-price">—</span><span class="pc-change"></span><span class="pc-when"></span></div>
       <div class="pc-range">${PRICE_RANGES.map(([k, l]) => `<button type="button" data-range="${k}">${l}</button>`).join('')}</div>
-      <div class="pc-toggles">${PRICE_OVERLAYS.filter(([k]) => k !== 'levels' || levels.length).map(([k, l]) =>
-        `<button type="button" class="pc-chip" data-overlay="${k}"><i></i>${l}</button>`).join('')}</div>
+      <div class="pc-toggles">${PRICE_OVERLAYS.filter(([k]) => (k !== 'levels' || levels.length) && (k !== 'events' || hayEventos)).map(([k, l]) =>
+        `<button type="button" class="pc-chip" data-overlay="${k}"><i></i>${l}</button>`).join('')}${nextHTML}</div>
       <div class="pc-canvas"><canvas></canvas><div class="pc-msg">Cargando gráfico…</div></div>
     </div>`;
   const root = container.querySelector('#' + id);
   root.__levels = levels;
+  root.__events = events;
   root.querySelectorAll('.pc-range button').forEach(b => {
     b.onclick = (ev) => {
       ev.stopPropagation();
@@ -4500,14 +4528,32 @@ function renderPriceChart(root, data) {
   const levels = root.__levels || [];
   const hasMa = !!data.ma && pts.some(p => p.ma50 != null || p.ma200 != null);
   const hasVol = pts.some(p => p.v > 0);
-  const show = { levels: ov.levels && levels.length > 0, ma: ov.ma && hasMa, vol: ov.vol && hasVol };
-  const chipColor = { levels: green, ma: PRICE_MA_COLORS.ma50, vol: muted };
+  const events = root.__events || { earnings: [], signals: [] };
+
+  // Posición de cada evento en el eje X. Diario/semanal: la última vela en o
+  // antes de la fecha. Intradía: la primera vela de ese día. Fuera del rango
+  // visible no se pinta.
+  const dia = t => String(t).slice(0, 10);
+  const idxFor = f => {
+    if (f < dia(pts[0].t) || f > dia(pts[pts.length - 1].t)) return -1;
+    if (data.intraday) return pts.findIndex(p => dia(p.t) === f);
+    let k = -1;
+    for (let i = 0; i < pts.length && dia(pts[i].t) <= f; i++) k = i;
+    return k;
+  };
+  const earnIdx = events.earnings.map(f => ({ f, i: idxFor(f) })).filter(e => e.i >= 0);
+  const sigIdx = events.signals.map(sg => ({ ...sg, i: idxFor(sg.date) })).filter(sg => sg.i >= 0 && Number.isFinite(sg.price));
+  const hasEvents = earnIdx.length > 0 || sigIdx.length > 0;
+
+  const show = { levels: ov.levels && levels.length > 0, ma: ov.ma && hasMa, vol: ov.vol && hasVol, events: ov.events && hasEvents };
+  const chipColor = { levels: green, ma: PRICE_MA_COLORS.ma50, vol: muted, events: PRICE_EARNINGS_COLOR };
   root.querySelectorAll('.pc-chip').forEach(b => {
     const k = b.dataset.overlay;
-    const disponible = k === 'ma' ? hasMa : k === 'vol' ? hasVol : true;
+    const disponible = k === 'ma' ? hasMa : k === 'vol' ? hasVol : k === 'events' ? hasEvents : true;
     b.classList.toggle('active', !!ov[k] && disponible);
     b.disabled = !disponible;
-    b.title = disponible ? '' : (k === 'ma' ? 'Medias móviles no disponibles en este rango' : 'Sin datos de volumen');
+    b.title = disponible ? (k === 'events' ? 'Resultados (línea naranja) y señales del Registro (puntos: verde WIN, rojo LOSS, gris EXPIRED, azul PENDING)' : '')
+      : ({ ma: 'Medias móviles no disponibles en este rango', vol: 'Sin datos de volumen', events: 'Sin resultados ni señales en este rango' })[k];
     b.querySelector('i').style.background = k === 'ma'
       ? `linear-gradient(90deg, ${PRICE_MA_COLORS.ma50} 50%, ${PRICE_MA_COLORS.ma200} 50%)` : chipColor[k];
   });
@@ -4603,6 +4649,34 @@ function renderPriceChart(root, data) {
     }
   };
 
+  // Resultados: línea vertical naranja con etiqueta. Señales: punto en el
+  // precio de entrada (verde WIN, rojo LOSS, gris EXPIRED, azul PENDING).
+  const eventMarks = {
+    id: 'pcEvents',
+    afterDatasetsDraw(chart) {
+      if (!show.events) return;
+      const c = chart.ctx, x = chart.scales.x, y = chart.scales.y, { top, bottom, left, right } = chart.chartArea;
+      c.save();
+      earnIdx.forEach(e => {
+        const px = x.getPixelForValue(e.i);
+        c.beginPath(); c.moveTo(px, top); c.lineTo(px, bottom);
+        c.lineWidth = 1; c.strokeStyle = PRICE_EARNINGS_COLOR; c.setLineDash([2, 3]); c.stroke();
+        c.setLineDash([]); c.font = '600 9px "DM Mono", monospace'; c.textBaseline = 'middle';
+        const txt = 'Resultados', w = c.measureText(txt).width + 8, bx = Math.min(Math.max(px - w / 2, left), right - w);
+        c.fillStyle = PRICE_EARNINGS_COLOR; c.fillRect(bx, top, w, 14);
+        c.fillStyle = '#000'; c.textAlign = 'center'; c.fillText(txt, bx + w / 2, top + 7);
+      });
+      sigIdx.forEach(sg => {
+        const px = x.getPixelForValue(sg.i), py = y.getPixelForValue(sg.price);
+        if (py < top || py > bottom) return;
+        c.beginPath(); c.arc(px, py, 5, 0, Math.PI * 2);
+        c.fillStyle = PRICE_SIGNAL_COLORS[sg.estado] || PRICE_SIGNAL_COLORS.PENDING; c.fill();
+        c.lineWidth = 1.5; c.strokeStyle = '#fff'; c.stroke();
+      });
+      c.restore();
+    }
+  };
+
   // Eje X: etiquetas cortas y sin solaparse (en móvil caben menos).
   // En 5D se marca solo el cambio de día, como hace Google Finance.
   const estrecho = (canvas.parentElement.clientWidth || 600) < 480;
@@ -4628,7 +4702,7 @@ function renderPriceChart(root, data) {
   __priceCharts[root.id] = new Chart(ctx, {
     type: 'line',
     data: { labels: pts.map(p => fmtDate(p.t, false)), datasets },
-    plugins: [crosshair, levelLabels],
+    plugins: [crosshair, levelLabels, eventMarks],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'index', intersect: false },
@@ -4647,6 +4721,12 @@ function renderPriceChart(root, data) {
               if (show.ma && p.ma50 != null) out.push('MA50  ' + fmtPrice(p.ma50));
               if (show.ma && p.ma200 != null) out.push('MA200 ' + fmtPrice(p.ma200));
               if (show.vol && p.v) out.push('Vol   ' + fmtVol(p.v));
+              if (show.events) {
+                const i = items[0].dataIndex;
+                earnIdx.filter(e => e.i === i).forEach(() => out.push('📅 Resultados'));
+                sigIdx.filter(sg => sg.i === i).forEach(sg => out.push(`● Señal ${sg.estado} · entrada ${fmtPrice(sg.price)}` +
+                  (sg.pnlPct != null && sg.pnlPct !== '' ? ` · ${parseFloat(sg.pnlPct) >= 0 ? '+' : ''}${parseFloat(sg.pnlPct).toFixed(2)}%` : '')));
+              }
               return out;
             },
           },
