@@ -151,8 +151,7 @@ def _row_to_sidi_company(row):
     atr = _float(row.get("atr_14"))
     spy_vs200 = _float(row.get("spy_vs200"))
     stop_loss = round(price * 0.95, 4) if price is not None else None
-    tp1 = round(price + atr, 4) if price is not None and atr is not None else None
-    tp2 = round(price + 1.5 * atr, 4) if price is not None and atr is not None else None
+    tp_v1 = round(price + 0.75 * atr, 4) if price is not None and atr is not None else None
     warnings_raw = (row.get("warnings") or "").strip()
     warnings = [] if not warnings_raw or warnings_raw.upper() == "OK" else _split_pipe(warnings_raw)
     roe = _float(row.get("roe"))
@@ -170,6 +169,8 @@ def _row_to_sidi_company(row):
         "selection": {
             "setup_hot": _bool(row.get("setup_hot")),
             "full_setup": _bool(row.get("full_setup")),
+            "strategy_version": row.get("sidi_strategy_version") or "SIDI_SHADOW_V1",
+            "gate_failures": row.get("sidi_gate_failures") or None,
             "combined_score": _float(row.get("combined_score")),
             "horizon": row.get("horizon") or None,
         },
@@ -180,6 +181,9 @@ def _row_to_sidi_company(row):
             "spy_price": _float(row.get("spy_price")),
             "spy_rsi": _float(row.get("spy_rsi")),
             "vix": _float(row.get("vix")),
+            "spy_return_20d_pct": _float(row.get("spy_return_20d")),
+            "abnormal_return_20d_pct": _float(row.get("abnormal_return_20d")),
+            "sidi_context_ready": _bool(row.get("sidi_context_ready")),
         },
         "technical": {
             "price": price,
@@ -196,10 +200,20 @@ def _row_to_sidi_company(row):
             "atr": atr,
         },
         "risk_plan": {
-            "stop_loss_pct": -5.0,
-            "stop_loss": stop_loss,
-            "target_tp1_1x_atr": tp1,
-            "target_tp2_1_5x_atr": tp2,
+            "strategy_version": row.get("sidi_strategy_version") or "SIDI_SHADOW_V1",
+            "entry_rule": row.get("sidi_entry_rule") or "NEXT_SESSION_OPEN",
+            "entry_status": row.get("sidi_entry_status") or "PENDING_NEXT_OPEN",
+            "atr14_signal": _float(row.get("sidi_atr14_signal") or row.get("atr_14")),
+            "target_atr_multiple": _float(row.get("sidi_tp_atr_mult"), 0.75),
+            "stop_loss_pct": _float(row.get("sidi_sl_pct"), -5.0),
+            "time_stop_sessions": _int(row.get("sidi_time_stop_sessions"), 7),
+            "risk_pct": _float(row.get("sidi_risk_pct"), 1.5),
+            "max_positions": _int(row.get("sidi_max_positions"), 5),
+            "gap_stop_rule": row.get("sidi_gap_stop_rule") or "EXIT_AT_OPEN_IF_OPEN_BELOW_SL",
+            "intraday_conflict_rule": row.get("sidi_intraday_conflict_rule") or "SL_FIRST",
+            "stop_loss_indicative_from_signal_close": stop_loss,
+            "target_indicative_from_signal_close": tp_v1,
+            "note": "Exact TP/SL are fixed from actual Open T+1",
         },
         "fundamentals": {
             "fundamental_score": _float(row.get("fund_score")),

@@ -1515,13 +1515,13 @@ body::before {
   <div class="filters-row">
     <div class="filter-group">
       <label>Score mín</label>
-      <input type="range" min="0" max="10" step="0.5" value="6" id="fScore" oninput="updateFilters()">
-      <span id="fScoreVal">6.0</span>
+      <input type="range" min="0" max="10" step="0.5" value="6.5" id="fScore" oninput="updateFilters()">
+      <span id="fScoreVal">6.5</span>
     </div>
     <div class="filter-group">
       <label>Drawdown mín %</label>
-      <input type="range" min="0" max="40" step="1" value="8" id="fDD" oninput="updateFilters()">
-      <span id="fDDVal">8%</span>
+      <input type="range" min="0" max="40" step="1" value="12" id="fDD" oninput="updateFilters()">
+      <span id="fDDVal">12%</span>
     </div>
     <div class="filter-group">
       <label>Sector</label>
@@ -1887,10 +1887,10 @@ body::before {
 
 <!-- REGISTRO AUTOMÁTICO DE SEÑALES -->
 <div class="section" id="sec-registro">
-  <div class="section-title">Registro de Señales <small style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);font-weight:400;letter-spacing:1px">Seguimiento automático de resultado (WIN/LOSS) y Win Rate por warning</small> <span id="registroSyncStatus" style="display:none;font-family:'DM Mono',monospace;font-size:10px;margin-left:12px"></span></div>
+  <div class="section-title">Registro de Señales <small style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);font-weight:400;letter-spacing:1px">LEGACY · sólo histórico hasta activar Shadow V1</small> <span id="registroSyncStatus" style="display:none;font-family:'DM Mono',monospace;font-size:10px;margin-left:12px"></span></div>
 
   <div class="panel" style="margin-bottom:16px;font-size:11px;color:var(--text2);line-height:1.7">
-    Cada vez que cargas un CSV nuevo: <strong style="color:var(--accent)">(1)</strong> se registran las empresas que cumplen mínimos (Score≥6.5, DD≥8%), <strong style="color:var(--accent)">con o sin warning</strong> · <strong style="color:var(--accent)">(2)</strong> las señales pendientes se evalúan contra el precio actual — <strong style="color:var(--green)">WIN</strong> si tocó +6.5%, <strong style="color:var(--red)">LOSS</strong> si tocó -5%, <strong style="color:var(--text3)">EXPIRED</strong> si pasaron 15 días sin resolver.
+    <strong style="color:var(--amber)">Registro legacy en modo sólo lectura.</strong> La estrategia activa es <strong style="color:var(--accent)">SIDI_SHADOW_V1</strong>. No se añadirán observaciones nuevas con el motor antiguo (+6.5%/15 días/entrada al cierre). El nuevo tracker usará Open T+1, TP 0.75×ATR, SL -5% y 7 sesiones.
   </div>
 
   <div class="stats-bar" id="registroStatsBar" style="margin-bottom:16px"></div>
@@ -2128,8 +2128,8 @@ function updateFilters() {
 }
 
 function resetFilters() {
-  document.getElementById('fScore').value = 6;
-  document.getElementById('fDD').value = 8;
+  document.getElementById('fScore').value = 6.5;
+  document.getElementById('fDD').value = 12;
   document.getElementById('fSector').value = '';
   document.getElementById('fHotOnly').checked = false;
   document.getElementById('fNoWarnOnly').checked = false;
@@ -2143,6 +2143,7 @@ function sortTable(col) {
 }
 
 function renderStats() {
+  const full = filteredData.filter(d => d.fullSetup === true);
   const hot = filteredData.filter(d => d.setupHot === true);
   const hotNoWarn = filteredData.filter(d => d.setupHot === true && (d.warningCount || 0) === 0);
   const avgScore = filteredData.length ? (filteredData.reduce((a,b) => a+b.score,0)/filteredData.length).toFixed(1) : 0;
@@ -2162,7 +2163,7 @@ function renderStats() {
 
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card green"><div class="stat-label">Empresas filtradas</div><div class="stat-val" style="color:var(--green)">${filteredData.length}</div><div class="stat-sub">de ${allData.length} en universo</div></div>
-    <div class="stat-card amber"><div class="stat-label">Setups HOT</div><div class="stat-val" style="color:var(--amber)">${hot.length}</div><div class="stat-sub">técnico + score + drawdown</div></div>
+    <div class="stat-card amber"><div class="stat-label">FULL SIDI V1</div><div class="stat-val" style="color:var(--amber)">${full.length}</div><div class="stat-sub">7 puertas congeladas</div></div>
     <div class="stat-card blue"><div class="stat-label">Score Promedio</div><div class="stat-val" style="color:var(--blue)">${avgScore}</div><div class="stat-sub">sobre 10</div></div>
     <div class="stat-card purple"><div class="stat-label">Drawdown Medio</div><div class="stat-val" style="color:var(--purple)">${avgDD}%</div><div class="stat-sub">caída desde máx 60d</div></div>
     <div class="stat-card red"><div class="stat-label">Con Warnings</div><div class="stat-val" style="color:var(--red)">${warns}</div><div class="stat-sub">revisar antes de operar</div></div>
@@ -2175,9 +2176,10 @@ function renderTable() {
   tbody.innerHTML = '';
   filteredData.forEach(d => {
     const scoreCls = d.score >= 7.5 ? 'score-high' : d.score >= 6 ? 'score-mid' : 'score-low';
+    const isFull = d.fullSetup === true;
     const isHot = d.setupHot === true;
-    const isWatch = !isHot && d.drawdown60 >= 8 && d.score >= 6;
-    const setupLabel = isHot ? '<span class="setup-badge setup-hot">HOT</span>' : isWatch ? '<span class="setup-badge setup-watch">WATCH</span>' : '<span class="setup-badge setup-none">—</span>';
+    const isWatch = !isHot && d.drawdown60 >= 12 && d.score >= 6.5;
+    const setupLabel = isFull ? '<span class="setup-badge setup-hot" title="SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12 · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1 · Abnormal20≤-10">FULL V1</span>' : isHot ? '<span class="setup-badge setup-watch">HOT TÉCNICO</span>' : isWatch ? '<span class="setup-badge setup-watch">WATCH</span>' : '<span class="setup-badge setup-none">—</span>';
     const wCount = d.warningCount || 0;
     const warnStr = Array.isArray(d.warnings) ? d.warnings.join('; ') : String(d.warnings ?? '');
     const warnTitle = (warnStr && warnStr !== 'OK') ? warnStr.replace(/"/g, '&quot;') : '';
@@ -4092,13 +4094,13 @@ function renderAnalysis(ticker) {
   `).join('');
 
   // RISK MATRIX
-  const stopDist = (res.atrNow * 2 / res.price * 100).toFixed(1);
-  const targetDist = (res.atrNow * 3 / res.price * 100).toFixed(1);
-  const rr = (parseFloat(targetDist) / parseFloat(stopDist)).toFixed(2);
+  const stopDist = 5.0;
+  const targetDist = (res.atrNow * 0.75 / res.price * 100).toFixed(1);
+  const rr = (parseFloat(targetDist) / stopDist).toFixed(2);
 
   document.getElementById('riskMatrix').innerHTML = `
-    <div class="risk-item"><div class="risk-label">Stop Loss (2×ATR)</div><div class="risk-val" style="color:var(--red)">-${stopDist}%</div><div class="risk-sub">$${(res.price * (1 - parseFloat(stopDist)/100)).toFixed(2)}</div></div>
-    <div class="risk-item"><div class="risk-label">Target (3×ATR)</div><div class="risk-val" style="color:var(--green)">+${targetDist}%</div><div class="risk-sub">$${(res.price * (1 + parseFloat(targetDist)/100)).toFixed(2)}</div></div>
+    <div class="risk-item"><div class="risk-label">SL SIDI V1 (-5%)</div><div class="risk-val" style="color:var(--red)">-${stopDist}%</div><div class="risk-sub">$${(res.price * (1 - parseFloat(stopDist)/100)).toFixed(2)}</div></div>
+    <div class="risk-item"><div class="risk-label">TP SIDI V1 (0.75×ATR)</div><div class="risk-val" style="color:var(--green)">+${targetDist}%</div><div class="risk-sub">$${(res.price * (1 + parseFloat(targetDist)/100)).toFixed(2)}</div></div>
     <div class="risk-item"><div class="risk-label">Ratio R/R</div><div class="risk-val" style="color:${parseFloat(rr)>=1.5?'var(--green)':'var(--amber)'}">${rr}×</div><div class="risk-sub">${parseFloat(rr)>=2?'Excelente':parseFloat(rr)>=1.5?'Aceptable':'Bajo'}</div></div>
     <div class="risk-item"><div class="risk-label">ATR / Precio</div><div class="risk-val" style="color:var(--text)">${(res.atrNow/res.price*100).toFixed(2)}%</div><div class="risk-sub">Volatilidad diaria</div></div>
     <div class="risk-item"><div class="risk-label">Earnings (días)</div><div class="risk-val" style="color:${res.earningsDays<=7?'var(--red)':res.earningsDays<=14?'var(--amber)':'var(--green)'}">${res.earningsDays}d</div><div class="risk-sub">${res.earningsDays<=7?'⚠ Riesgo alto':res.earningsDays<=14?'Precaución':'Seguro'}</div></div>
@@ -4213,7 +4215,7 @@ function renderMethodology() {
       <strong style="color:var(--green)">5-10 días:</strong> RSI muy bajo (<30) + soporte + MACD mejorando. Señal fuerte, rebote rápido esperado.<br><br>
       <strong style="color:var(--cyan)">10-20 días:</strong> Tendencia semanal alcista (Golden Cross). El rebote puede ser el inicio de una recuperación más amplia.<br><br>
       <strong style="color:var(--amber)">3-7 días:</strong> Rebote en tendencia bajista. Funciona pero el "escape" es corto — la tendencia dominante retoma el control rápido.<br><br>
-      <strong style="color:var(--white)">Regla de salida:</strong> El target primario es 3×ATR desde entrada. El target secundario es la resistencia más cercana. Sale primero quien llegue.
+      <strong style="color:var(--white)">Regla de salida:</strong> Señal al cierre T → entrada Open T+1 · TP = 0.75×ATR14 de señal · SL = -5% · time-stop = 7 sesiones · gap bajo SL = salida al Open · si TP y SL se tocan en la misma vela, SL primero.
     </div>
   `;
 }
@@ -4599,7 +4601,24 @@ function processCSVRows(data, filename) {
     sharesYoY:         parseFloat(r.shares_yoy || r.sharesYoY || 0),
     warnings:          r.warnings || 'OK',
     warningCount:      parseInt(r.warning_count || 0),
-    setupHot:          String(r.setup_hot) === 'True' || r.setup_hot === true,
+    setupHot:          String(r.setup_hot).toLowerCase() === 'true' || r.setup_hot === true,
+    fullSetup:         String(r.sidi_full_setup ?? r.full_setup).toLowerCase() === 'true' || r.sidi_full_setup === true || r.full_setup === true,
+    strategyVersion:   r.sidi_strategy_version || '',
+    contextReady:      String(r.sidi_context_ready).toLowerCase() === 'true' || r.sidi_context_ready === true,
+    spy20:             parseFloat(r.spy_return_20d || 0),
+    abnormal20:        parseFloat(r.abnormal_return_20d || 0),
+    sidiGateFailures:  r.sidi_gate_failures || '',
+    dayOpen:           parseFloat(r.day_open || 0),
+    dayHigh:           parseFloat(r.day_high || 0),
+    dayLow:            parseFloat(r.day_low || 0),
+    dayClose:          parseFloat(r.day_close || r.price || 0),
+    atrSignal:         parseFloat(r.sidi_atr14_signal || r.atr_14 || 0),
+    sidiEntryRule:     r.sidi_entry_rule || '',
+    sidiTpAtrMult:     parseFloat(r.sidi_tp_atr_mult || 0.75),
+    sidiSlPct:         parseFloat(r.sidi_sl_pct || -5),
+    sidiTimeStop:      parseInt(r.sidi_time_stop_sessions || 7),
+    sidiRiskPct:       parseFloat(r.sidi_risk_pct || 1.5),
+    sidiMaxPositions:  parseInt(r.sidi_max_positions || 5),
     horizon:           r.horizon || '',
     trendBias:         r.trend_bias || r.trendBias || '',
     techScore:         parseFloat(r.tech_score || 0),
@@ -5036,6 +5055,7 @@ function diasEntreFechas(f1, f2) {
 
 // ── Registro + evaluación automática en cada carga de CSV ────────
 function registrarSeñalesAutomaticas(filename) {
+  if (allData.some(d => d.strategyVersion === 'SIDI_SHADOW_V1')) { renderRegistro(); return; }
   const fechaHoy = extraerFechaDeArchivo(filename);
   const registro = loadRegistro();
 
