@@ -634,7 +634,7 @@ def _control_center_analysis(position, analysis_date):
     date_value = str(_first_value(position.get("analysis_date"), analysis_date) or "")[:10]
     signal_date = str(_first_value(
         position.get("signal_date"), technical.get("price_date"),
-        position.get("price_date"), date_value,
+        position.get("price_date"),
     ) or "")[:10]
     price_eur = _float(_first_value(position.get("price_current_eur"), position.get("price_eur")), 0.0)
     price_usd = _float(_first_value(position.get("price_current_usd"), position.get("price_usd"), technical.get("price")), 0.0)
@@ -724,6 +724,11 @@ def control_center_upsert_analysis_payload(payload):
         analysis = _control_center_analysis(position, analysis_date)
         if not analysis:
             continue
+        if (analysis["strategyVersion"].upper() == "SIDI_SHADOW_V1"
+                and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", analysis["signalDate"])):
+            raise ValueError(
+                f"signal_date obligatorio para {analysis['ticker']} en SIDI_SHADOW_V1"
+            )
         if not analysis["fullSetup"]:
             ignored.append(analysis["ticker"])
             continue

@@ -162,6 +162,24 @@ def test_non_full_v1_is_not_registered():
         server.get_turso_conn = original
 
 
+def test_v1_without_signal_date_is_rejected_instead_of_inventing_a_key():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        payload = _payload()
+        del payload["sidi_excel_payload"]["positions"][0]["signal_date"]
+        try:
+            server.control_center_upsert_analysis_payload(payload)
+        except ValueError as error:
+            assert "signal_date obligatorio" in str(error)
+        else:
+            raise AssertionError("El JSON V1 sin signal_date debía rechazarse")
+        assert server.control_center_get() is None
+    finally:
+        server.get_turso_conn = original
+
+
 def test_late_analysis_is_archived_and_not_made_operable():
     conn = _memory_connection()
     original = server.get_turso_conn
