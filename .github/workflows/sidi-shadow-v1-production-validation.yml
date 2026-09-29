@@ -11,6 +11,7 @@ on:
       - 'modules/ingesta/**'
       - 'test_shadow_tracker.py'
       - 'test_control_center_ingest.py'
+      - 'test_control_center_contract.py'
       - '.github/workflows/sidi-shadow-v1-production-validation.yml'
   workflow_dispatch:
 
@@ -32,13 +33,14 @@ jobs:
           pip install -r requirements.txt
       - name: Compile strategy modules
         run: |
-          python -m py_compile servidor_local.py main_ingesta.py modules/shadow_tracker.py modules/ingesta/tecnico.py modules/ingesta/sidi_context.py modules/ingesta/scoring.py modules/ingesta/sidi_trade_plan.py modules/ingesta/mercado.py modules/ingesta/exportar.py test_shadow_tracker.py test_control_center_ingest.py
+          python -m py_compile servidor_local.py main_ingesta.py modules/shadow_tracker.py modules/ingesta/tecnico.py modules/ingesta/sidi_context.py modules/ingesta/scoring.py modules/ingesta/sidi_trade_plan.py modules/ingesta/mercado.py modules/ingesta/exportar.py test_shadow_tracker.py test_control_center_ingest.py test_control_center_contract.py
       - name: Run deterministic unit tests
         run: |
           python - <<'PY'
           import test_control_center_ingest as control
+          import test_control_center_contract as contract
           import test_shadow_tracker as shadow
-          for module in (control, shadow):
+          for module in (control, contract, shadow):
               for name in sorted(item for item in dir(module) if item.startswith('test_')):
                   getattr(module, name)()
                   print('PASS', module.__name__, name)

@@ -179,6 +179,7 @@ def _row_to_sidi_company(row):
 
     return {
         "ticker": row.get("ticker"),
+        "signal_date": row.get("price_date") or row.get("data_vintage") or None,
         "name": row.get("name"),
         "sector": row.get("sector"),
         "industry": row.get("industry") or None,
@@ -466,8 +467,104 @@ def registro_delete_all():
     conn.commit()
 
 
+CONTROL_CENTER_SCHEMA_VERSION = 5
+OPERABLE_VERDICTS = {"VALIDADA", "VALIDADA CON CONDICIONES"}
+ACTIVE_OPERATION_STATUSES = {"PLANNED", "OPEN", "TP1"}
+
+
+def _setup_key(strategy_version, ticker, signal_date):
+    return "|".join([
+        str(strategy_version or "LEGACY").upper(),
+        str(ticker or "").upper(),
+        str(signal_date or "")[:10],
+    ])
+
+
+def _migrate_control_center_state(state):
+    """Migra V3/V4 a V5 sin borrar históricos ni operaciones LIVE."""
+    if not isinstance(state, dict):
+        state = {}
+    state["settings"] = {**CONTROL_CENTER_DEFAULT_SETTINGS, **(state.get("settings") or {})}
+    analyses = state.get("analyses") if isinstance(state.get("analyses"), list) else []
+    trades = state.get("trades") if isinstance(state.get("trades"), list) else []
+
+    by_id = {}
+    by_identity = {}
+    for analysis in analyses:
+        if not isinstance(analysis, dict):
+            continue
+        analysis["ticker"] = str(analysis.get("ticker") or "").upper()
+        analysis["strategyVersion"] = analysis.get("strategyVersion") or "LEGACY"
+        analysis["signalDate"] = str(analysis.get("signalDate") or analysis.get("date") or "")[:10]
+        analysis["analysisDate"] = str(analysis.get("analysisDate") or analysis.get("date") or analysis["signalDate"])[:10]
+        analysis["date"] = analysis["analysisDate"]
+        analysis["setupKey"] = _setup_key(analysis["strategyVersion"], analysis["ticker"], analysis["signalDate"])
+        analysis["id"] = analysis.get("id") or "S-" + hashlib.sha256(analysis["setupKey"].encode()).hexdigest()[:16]
+        analysis.setdefault("route", "REGISTRY")
+        analysis.setdefault("routingReason", "LEGACY_MIGRATION" if analysis["strategyVersion"] == "LEGACY" else "VERDICT_ARCHIVE")
+        by_id[analysis["id"]] = analysis
+        by_identity[analysis["setupKey"]] = analysis
+
+    duplicate_fields = {
+        "ticker", "analysisNewsScore", "analysisVerdict", "analysisSource",
+        "strategyVersion", "sector", "fallReason", "signalDate", "referencePrice",
+    }
+    for operation in trades:
+        if not isinstance(operation, dict):
+            continue
+        setup = by_id.get(operation.get("setupId") or operation.get("analysisId"))
+        if not setup:
+            identity = _setup_key(
+                operation.get("strategyVersion"), operation.get("ticker"),
+                operation.get("signalDate") or operation.get("entryDate"),
+            )
+            setup = by_identity.get(identity)
+        if setup:
+            operation["setupId"] = setup["id"]
+            operation.pop("analysisId", None)
+            for field in duplicate_fields:
+                operation.pop(field, None)
+            if operation.get("status") in ACTIVE_OPERATION_STATUSES:
+                setup["route"] = "OPERATIONS"
+                setup["routingReason"] = "ACTIVE_OPERATION"
+            elif operation.get("status") == "CLOSED":
+                setup["route"] = "REGISTRY"
+                setup["routingReason"] = "LIVE_CLOSED"
+
+    state["analyses"] = analyses
+    state["trades"] = trades
+    state["schemaVersion"] = CONTROL_CENTER_SCHEMA_VERSION
+    return state
+
+
+def _hydrate_shadow_results(state, conn):
+    """Añade el resultado Shadow a los setups ya analizados; no expone señales crudas."""
+    try:
+        columns = [
+            "ticker", "signal_date", "strategy_version", "status", "entry_date",
+            "entry_open", "stop_price", "target_price", "shares", "risk_eur",
+            "sessions_held", "exit_date", "exit_price", "exit_reason",
+            "pnl_pct_net", "pnl_eur_net", "r_multiple_net", "capital_after",
+        ]
+        rows = conn.execute(
+            f"SELECT {', '.join(columns)} FROM sidi_shadow_signals"
+        ).fetchall()
+        shadow_by_key = {
+            _setup_key(row[2], row[0], row[1]): dict(zip(columns, row))
+            for row in rows
+        }
+        for analysis in state.get("analyses", []):
+            analysis.pop("shadow", None)
+            shadow = shadow_by_key.get(analysis.get("setupKey"))
+            if shadow:
+                analysis["shadow"] = shadow
+    except Exception:
+        pass
+    return state
+
+
 def control_center_get():
-    """Devuelve el estado canónico LIVE del Control Center."""
+    """Devuelve el maestro V5: setups analizados + operaciones enlazadas."""
     conn = get_turso_conn()
     row = conn.execute(
         "SELECT schema_version, state_json, updated_at "
@@ -476,25 +573,27 @@ def control_center_get():
     ).fetchone()
     if not row:
         return None
-    schema_version, raw, updated_at = row
-    state = json.loads(raw)
+    _, raw, updated_at = row
+    state = _hydrate_shadow_results(_migrate_control_center_state(json.loads(raw)), conn)
     return {
-        "schema_version": schema_version,
+        "schema_version": CONTROL_CENTER_SCHEMA_VERSION,
         "updated_at": updated_at,
         "state": state,
     }
 
 
-def control_center_save(state, schema_version=4):
-    """Guarda una instantánea completa; Turso es la fuente de verdad."""
-    if not isinstance(state, dict):
-        raise ValueError("state debe ser un objeto JSON")
-    if not isinstance(state.get("analyses", []), list):
+def control_center_save(state, schema_version=CONTROL_CENTER_SCHEMA_VERSION):
+    """Guarda el maestro; Shadow se rehidrata desde su tabla y no se duplica."""
+    state = _migrate_control_center_state(state)
+    if not isinstance(state.get("analyses"), list):
         raise ValueError("state.analyses debe ser una lista")
-    if not isinstance(state.get("trades", []), list):
+    if not isinstance(state.get("trades"), list):
         raise ValueError("state.trades debe ser una lista")
+    state_to_save = json.loads(json.dumps(state, ensure_ascii=False))
+    for analysis in state_to_save["analyses"]:
+        analysis.pop("shadow", None)
     now = datetime.now().isoformat()
-    raw = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+    raw = json.dumps(state_to_save, ensure_ascii=False, separators=(",", ":"))
     conn = get_turso_conn()
     conn.execute("""
         INSERT INTO sidi_control_center_state
@@ -504,7 +603,7 @@ def control_center_save(state, schema_version=4):
             schema_version = excluded.schema_version,
             state_json = excluded.state_json,
             updated_at = excluded.updated_at
-    """, ("main", int(schema_version or 4), raw, now))
+    """, ("main", CONTROL_CENTER_SCHEMA_VERSION, raw, now))
     conn.commit()
     return now
 
@@ -527,11 +626,16 @@ def _control_center_analysis(position, analysis_date):
     trade = position.get("trade_plan") if isinstance(position.get("trade_plan"), dict) else {}
     risk = position.get("risk_plan") if isinstance(position.get("risk_plan"), dict) else {}
     technical = position.get("technical") if isinstance(position.get("technical"), dict) else {}
+    selection = position.get("selection") if isinstance(position.get("selection"), dict) else {}
     ticker = str(position.get("ticker") or "").strip().upper()
     if not ticker:
         return None
 
     date_value = str(_first_value(position.get("analysis_date"), analysis_date) or "")[:10]
+    signal_date = str(_first_value(
+        position.get("signal_date"), technical.get("price_date"),
+        position.get("price_date"), date_value,
+    ) or "")[:10]
     price_eur = _float(_first_value(position.get("price_current_eur"), position.get("price_eur")), 0.0)
     price_usd = _float(_first_value(position.get("price_current_usd"), position.get("price_usd"), technical.get("price")), 0.0)
     atr_usd = _float(_first_value(
@@ -547,10 +651,15 @@ def _control_center_analysis(position, analysis_date):
 
     strategy_version = str(_first_value(
         position.get("strategy_version"), trade.get("strategy_version"),
-        risk.get("strategy_version"), "SIDI_SHADOW_V1",
+        risk.get("strategy_version"), selection.get("strategy_version"), "SIDI_SHADOW_V1",
+    ))
+    full_setup = _bool(_first_value(
+        position.get("full_setup"), position.get("sidi_full_setup"), selection.get("full_setup"),
     ))
     normalized = {
         "date": date_value or datetime.now().strftime("%Y-%m-%d"),
+        "analysisDate": date_value or datetime.now().strftime("%Y-%m-%d"),
+        "signalDate": signal_date,
         "ticker": ticker,
         "company": str(_first_value(position.get("company"), position.get("name")) or ""),
         "sector": str(position.get("sector") or ""),
@@ -565,7 +674,7 @@ def _control_center_analysis(position, analysis_date):
         "dataQuality": str(position.get("data_quality") or ""),
         "decision": str(position.get("decision") or ""),
         "strategyVersion": strategy_version,
-        "fullSetup": _bool(_first_value(position.get("full_setup"), position.get("sidi_full_setup"))),
+        "fullSetup": full_setup,
         "atr14Eur": atr_eur,
         "entryRule": str(_first_value(position.get("entry_rule"), risk.get("entry_rule"), "NEXT_SESSION_OPEN" if strategy_version == "SIDI_SHADOW_V1" else "")),
         "entry": _float(_first_value(trade.get("entry_ideal_eur"), position.get("entry_ideal_eur")), 0.0),
@@ -590,7 +699,7 @@ def _control_center_analysis(position, analysis_date):
 
 
 def control_center_upsert_analysis_payload(payload):
-    """Inserta resultados de Work en la base maestra sin duplicar ticker+fecha."""
+    """Registra solo FULL analizadas y las enruta sin duplicar datos."""
     sidi = payload.get("sidi_excel_payload") if isinstance(payload, dict) else None
     if not sidi and isinstance(payload, dict):
         sidi = payload
@@ -605,11 +714,9 @@ def control_center_upsert_analysis_payload(payload):
     state = saved.get("state") if saved else None
     if not isinstance(state, dict):
         state = {"settings": dict(CONTROL_CENTER_DEFAULT_SETTINGS), "analyses": [], "trades": []}
-    state["settings"] = {**CONTROL_CENTER_DEFAULT_SETTINGS, **(state.get("settings") or {})}
-    state["analyses"] = state.get("analyses") if isinstance(state.get("analyses"), list) else []
-    state["trades"] = state.get("trades") if isinstance(state.get("trades"), list) else []
+    state = _migrate_control_center_state(state)
 
-    inserted, updated, unchanged = [], [], []
+    inserted, updated, unchanged, ignored = [], [], [], []
     now = datetime.now().isoformat()
     for position in positions:
         if not isinstance(position, dict):
@@ -617,38 +724,102 @@ def control_center_upsert_analysis_payload(payload):
         analysis = _control_center_analysis(position, analysis_date)
         if not analysis:
             continue
-        existing = next((item for item in state["analyses"]
-                         if item.get("ticker") == analysis["ticker"] and item.get("date") == analysis["date"]), None)
-        if existing and existing.get("sourceFingerprint") == analysis["sourceFingerprint"]:
-            unchanged.append(analysis["ticker"])
+        if not analysis["fullSetup"]:
+            ignored.append(analysis["ticker"])
             continue
-        if existing:
-            analysis["id"] = existing.get("id") or f"A-{analysis['ticker']}-{analysis['date'].replace('-', '')}"
+        analysis["setupKey"] = _setup_key(
+            analysis["strategyVersion"], analysis["ticker"], analysis["signalDate"]
+        )
+        existing = next((item for item in state["analyses"]
+                         if item.get("setupKey") == analysis["setupKey"]), None)
+        same_payload = bool(existing and existing.get("sourceFingerprint") == analysis["sourceFingerprint"])
+        if same_payload:
+            unchanged.append(analysis["ticker"])
+        elif existing:
+            analysis["id"] = existing.get("id")
             analysis["createdAt"] = existing.get("createdAt") or now
+            analysis["verdictOriginal"] = existing.get("verdictOriginal") or existing.get("verdict")
+            analysis["newsScoreOriginal"] = existing.get("newsScoreOriginal", existing.get("newsScore"))
+            analysis["analysisCompletedAt"] = existing.get("analysisCompletedAt") or existing.get("updatedAt") or now
             analysis["revision"] = int(existing.get("revision") or 1) + 1
             analysis["updatedAt"] = now
             existing.clear()
             existing.update(analysis)
             updated.append(analysis["ticker"])
-        else:
+        elif not existing:
             analysis.update({
-                "id": f"A-{analysis['ticker']}-{analysis['date'].replace('-', '')}",
+                "id": "S-" + hashlib.sha256(analysis["setupKey"].encode()).hexdigest()[:16],
                 "createdAt": now,
                 "updatedAt": now,
+                "analysisCompletedAt": now,
+                "verdictOriginal": analysis["verdict"],
+                "newsScoreOriginal": analysis["newsScore"],
                 "revision": 1,
             })
             state["analyses"].append(analysis)
             inserted.append(analysis["ticker"])
 
-    if inserted or updated or not saved:
-        state["schemaVersion"] = 4
+        current = existing if existing else analysis
+        setup_operations = [trade_item for trade_item in state["trades"]
+                            if trade_item.get("setupId") == current["id"]]
+        active = next((trade_item for trade_item in setup_operations
+                       if trade_item.get("status") in ACTIVE_OPERATION_STATUSES), None)
+        closed = next((trade_item for trade_item in setup_operations
+                       if trade_item.get("status") == "CLOSED"), None)
+        cancelled = next((trade_item for trade_item in setup_operations
+                          if trade_item.get("status") == "CANCELLED"), None)
+        on_time = current["analysisDate"] <= current["signalDate"]
+        operable = current["verdict"] in OPERABLE_VERDICTS
+        if closed:
+            current["route"] = "REGISTRY"
+            current["routingReason"] = "LIVE_CLOSED"
+            current["timingStatus"] = "ON_TIME" if on_time else "LATE_ANALYSIS"
+        elif active and active.get("status") in {"OPEN", "TP1"}:
+            current["route"] = "OPERATIONS"
+            current["routingReason"] = "ACTIVE_OPERATION"
+            current["timingStatus"] = "ON_TIME" if on_time else "LATE_ANALYSIS"
+        elif operable and on_time and current.get("atr14Eur"):
+            current["route"] = "OPERATIONS"
+            current["routingReason"] = "AUTO_VERDICT_OPERABLE"
+            current["timingStatus"] = "ON_TIME"
+            if not active and cancelled:
+                cancelled["status"] = "PLANNED"
+                cancelled["createdAt"] = now
+                cancelled.pop("cancelReason", None)
+                cancelled.pop("cancelledAt", None)
+            elif not active:
+                state["trades"].append({
+                    "id": "O-" + hashlib.sha256(current["setupKey"].encode()).hexdigest()[:16],
+                    "setupId": current["id"],
+                    "status": "PLANNED",
+                    "createdAt": now,
+                })
+        else:
+            current["route"] = "REGISTRY"
+            if not operable:
+                current["routingReason"] = "VERDICT_" + current["verdict"].replace(" ", "_")
+                current["timingStatus"] = "ON_TIME" if on_time else "LATE_ANALYSIS"
+            elif not on_time:
+                current["routingReason"] = "ANALYSIS_LATE"
+                current["timingStatus"] = "LATE_ANALYSIS"
+            else:
+                current["routingReason"] = "MISSING_ATR"
+                current["timingStatus"] = "ON_TIME"
+            if active and active.get("status") == "PLANNED":
+                active["status"] = "CANCELLED"
+                active["cancelReason"] = current["routingReason"]
+                active["cancelledAt"] = now
+
+    if inserted or updated or unchanged or not saved:
+        state["schemaVersion"] = CONTROL_CENTER_SCHEMA_VERSION
         state["updatedAt"] = now
-        control_center_save(state, 4)
+        control_center_save(state, CONTROL_CENTER_SCHEMA_VERSION)
     return {
         "analysis_date": analysis_date,
         "inserted": inserted,
         "updated": updated,
         "unchanged": unchanged,
+        "ignored_non_full": ignored,
         "count": len(inserted) + len(updated),
     }
 
@@ -1210,8 +1381,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = self.rfile.read(length) if length else b"{}"
             payload = json.loads(body.decode("utf-8"))
             state = payload.get("state", payload)
-            updated_at = control_center_save(state, payload.get("schema_version", 4))
-            self.send_json({"ok": True, "schema_version": 4, "updated_at": updated_at})
+            updated_at = control_center_save(state, payload.get("schema_version", CONTROL_CENTER_SCHEMA_VERSION))
+            self.send_json({"ok": True, "schema_version": CONTROL_CENTER_SCHEMA_VERSION, "updated_at": updated_at})
         except json.JSONDecodeError:
             self.send_json({"ok": False, "error": "JSON inválido"}, status=400)
         except ValueError as e:

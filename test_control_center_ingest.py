@@ -1,3 +1,4 @@
+import copy
 import sqlite3
 
 import servidor_local as server
@@ -13,6 +14,15 @@ def _memory_connection():
             updated_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE sidi_shadow_signals (
+            ticker TEXT, signal_date TEXT, strategy_version TEXT, status TEXT,
+            entry_date TEXT, entry_open REAL, stop_price REAL, target_price REAL,
+            shares INTEGER, risk_eur REAL, sessions_held INTEGER, exit_date TEXT,
+            exit_price REAL, exit_reason TEXT, pnl_pct_net REAL, pnl_eur_net REAL,
+            r_multiple_net REAL, capital_after REAL
+        )
+    """)
     return conn
 
 
@@ -22,6 +32,7 @@ def _payload(verdict="VALIDADA"):
             "analysis_date": "2026-09-28",
             "positions": [{
                 "ticker": "AAA",
+                "signal_date": "2026-09-28",
                 "company": "Alpha",
                 "sector": "Industrials",
                 "price_current_eur": 90,
@@ -57,8 +68,14 @@ def test_work_payload_is_idempotent_and_preserves_live_trades():
         assert first["inserted"] == ["AAA"]
         assert second["unchanged"] == ["AAA"]
         assert len(state["analyses"]) == 1
-        assert state["trades"] == [{"id": "T-1", "ticker": "ZZZ", "status": "OPEN"}]
+        assert len(state["trades"]) == 2
+        assert any(item["id"] == "T-1" for item in state["trades"])
+        linked = next(item for item in state["trades"] if item.get("setupId"))
+        assert linked["status"] == "PLANNED"
+        assert "ticker" not in linked
+        assert "analysisVerdict" not in linked
         assert state["analyses"][0]["analysisSource"] == "CHATGPT_WORK"
+        assert state["analyses"][0]["route"] == "OPERATIONS"
     finally:
         server.get_turso_conn = original
 
@@ -85,3 +102,137 @@ def test_atr_is_converted_to_eur_for_v1_execution():
     assert analysis["atr14Eur"] == 3.6
     assert analysis["entryRule"] == "NEXT_SESSION_OPEN"
     assert analysis["fullSetup"] is True
+
+
+def test_v4_migration_links_operation_and_removes_copied_analysis_fields():
+    state = server._migrate_control_center_state({
+        "schemaVersion": 4,
+        "settings": {},
+        "analyses": [{
+            "id": "A-1", "date": "2026-09-28", "ticker": "aaa",
+            "strategyVersion": "SIDI_SHADOW_V1", "verdict": "VALIDADA",
+        }],
+        "trades": [{
+            "id": "T-1", "analysisId": "A-1", "status": "OPEN",
+            "ticker": "AAA", "analysisVerdict": "VALIDADA",
+            "analysisNewsScore": 7.5, "strategyVersion": "SIDI_SHADOW_V1",
+        }],
+    })
+    analysis, operation = state["analyses"][0], state["trades"][0]
+    assert state["schemaVersion"] == 5
+    assert analysis["setupKey"] == "SIDI_SHADOW_V1|AAA|2026-09-28"
+    assert analysis["route"] == "OPERATIONS"
+    assert operation["setupId"] == "A-1"
+    assert "analysisId" not in operation
+    assert "ticker" not in operation
+    assert "analysisVerdict" not in operation
+    assert "analysisNewsScore" not in operation
+
+
+def test_same_ticker_with_different_signal_dates_creates_two_setups():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        first = _payload("WATCHLIST")
+        second = copy.deepcopy(first)
+        second["sidi_excel_payload"]["positions"][0]["signal_date"] = "2026-09-27"
+        server.control_center_upsert_analysis_payload(first)
+        server.control_center_upsert_analysis_payload(second)
+        state = server.control_center_get()["state"]
+        assert len(state["analyses"]) == 2
+        assert len({item["setupKey"] for item in state["analyses"]}) == 2
+    finally:
+        server.get_turso_conn = original
+
+
+def test_non_full_v1_is_not_registered():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        payload = _payload()
+        payload["sidi_excel_payload"]["positions"][0]["full_setup"] = False
+        result = server.control_center_upsert_analysis_payload(payload)
+        state = server.control_center_get()["state"]
+        assert result["ignored_non_full"] == ["AAA"]
+        assert state["analyses"] == []
+        assert state["trades"] == []
+    finally:
+        server.get_turso_conn = original
+
+
+def test_late_analysis_is_archived_and_not_made_operable():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        payload = _payload()
+        payload["sidi_excel_payload"]["positions"][0]["signal_date"] = "2026-09-27"
+        server.control_center_upsert_analysis_payload(payload)
+        state = server.control_center_get()["state"]
+        analysis = state["analyses"][0]
+        assert analysis["route"] == "REGISTRY"
+        assert analysis["routingReason"] == "ANALYSIS_LATE"
+        assert analysis["timingStatus"] == "LATE_ANALYSIS"
+        assert state["trades"] == []
+    finally:
+        server.get_turso_conn = original
+
+
+def test_shadow_is_hydrated_only_for_analyzed_setup():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        server.control_center_upsert_analysis_payload(_payload("BLOQUEADA"))
+        rows = [
+            ("AAA", "2026-09-28", "SIDI_SHADOW_V1", "CLOSED", "2026-09-29", 100, 95, 103, 10, 50, 2, "2026-09-30", 103, "TP", 2.8, 28, .56, 10028),
+            ("RAW", "2026-09-28", "SIDI_SHADOW_V1", "CLOSED", "2026-09-29", 50, 47.5, 52, 10, 25, 2, "2026-09-30", 47.5, "SL", -5.2, -26, -1.04, 10002),
+        ]
+        conn.executemany("INSERT INTO sidi_shadow_signals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+        conn.commit()
+        state = server.control_center_get()["state"]
+        assert len(state["analyses"]) == 1
+        assert state["analyses"][0]["shadow"]["exit_reason"] == "TP"
+        assert all(item["ticker"] != "RAW" for item in state["analyses"])
+    finally:
+        server.get_turso_conn = original
+
+
+def test_verdict_revision_reuses_cancelled_plan_without_duplicates():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        server.control_center_upsert_analysis_payload(_payload("VALIDADA"))
+        server.control_center_upsert_analysis_payload(_payload("WATCHLIST"))
+        server.control_center_upsert_analysis_payload(_payload("VALIDADA"))
+        state = server.control_center_get()["state"]
+        linked = [item for item in state["trades"] if item.get("setupId")]
+        assert len(linked) == 1
+        assert linked[0]["status"] == "PLANNED"
+        assert state["analyses"][0]["route"] == "OPERATIONS"
+    finally:
+        server.get_turso_conn = original
+
+
+def test_closed_operation_stays_in_registry_after_analysis_revision():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        server.control_center_upsert_analysis_payload(_payload("VALIDADA"))
+        state = server.control_center_get()["state"]
+        state["trades"][0]["status"] = "CLOSED"
+        state["trades"][0]["exitDate"] = "2026-10-02"
+        server.control_center_save(state)
+        revised = _payload("VALIDADA CON CONDICIONES")
+        server.control_center_upsert_analysis_payload(revised)
+        state = server.control_center_get()["state"]
+        assert len(state["trades"]) == 1
+        assert state["trades"][0]["status"] == "CLOSED"
+        assert state["analyses"][0]["route"] == "REGISTRY"
+        assert state["analyses"][0]["routingReason"] == "LIVE_CLOSED"
+    finally:
+        server.get_turso_conn = original
