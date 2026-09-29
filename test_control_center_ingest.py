@@ -1,5 +1,6 @@
 import copy
 import sqlite3
+from datetime import datetime, timezone
 
 import servidor_local as server
 
@@ -102,6 +103,19 @@ def test_atr_is_converted_to_eur_for_v1_execution():
     assert analysis["atr14Eur"] == 3.6
     assert analysis["entryRule"] == "NEXT_SESSION_OPEN"
     assert analysis["fullSetup"] is True
+
+
+def test_t1_analysis_is_on_time_before_new_york_open():
+    before_open = datetime(2026, 9, 29, 13, 29, tzinfo=timezone.utc)
+    at_open = datetime(2026, 9, 29, 13, 30, tzinfo=timezone.utc)
+    assert server._analysis_is_on_time("2026-09-28", "2026-09-29", before_open)
+    assert not server._analysis_is_on_time("2026-09-28", "2026-09-29", at_open)
+
+
+def test_t1_skips_weekends_and_nyse_good_friday():
+    before_open = datetime(2026, 4, 6, 13, 0, tzinfo=timezone.utc)
+    assert server._next_nyse_session(datetime(2026, 4, 2).date()).isoformat() == "2026-04-06"
+    assert server._analysis_is_on_time("2026-04-02", "2026-04-06", before_open)
 
 
 def test_v4_migration_links_operation_and_removes_copied_analysis_fields():

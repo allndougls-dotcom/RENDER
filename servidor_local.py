@@ -34,7 +34,8 @@ import threading
 import webbrowser
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from urllib.parse import urlparse, parse_qs, unquote
 
 PORT = int(os.environ.get("PORT", 8000))
@@ -470,6 +471,86 @@ def registro_delete_all():
 CONTROL_CENTER_SCHEMA_VERSION = 5
 OPERABLE_VERDICTS = {"VALIDADA", "VALIDADA CON CONDICIONES"}
 ACTIVE_OPERATION_STATUSES = {"PLANNED", "OPEN", "TP1"}
+NEW_YORK = ZoneInfo("America/New_York")
+
+
+def _observed_holiday(day):
+    if day.weekday() == 5:
+        return day - timedelta(days=1)
+    if day.weekday() == 6:
+        return day + timedelta(days=1)
+    return day
+
+
+def _nth_weekday(year, month, weekday, occurrence):
+    day = date(year, month, 1)
+    return day + timedelta(days=(weekday - day.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def _last_weekday(year, month, weekday):
+    if month == 12:
+        day = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        day = date(year, month + 1, 1) - timedelta(days=1)
+    return day - timedelta(days=(day.weekday() - weekday) % 7)
+
+
+def _easter_sunday(year):
+    """Algoritmo gregoriano de Meeus/Jones/Butcher."""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    month_seed = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * month_seed) // 451
+    month = (h + month_seed - 7 * m + 114) // 31
+    day = (h + month_seed - 7 * m + 114) % 31 + 1
+    return date(year, month, day)
+
+
+def _nyse_holidays(year):
+    holidays = {
+        _observed_holiday(date(year, 1, 1)),
+        _nth_weekday(year, 1, 0, 3),       # Martin Luther King Jr.
+        _nth_weekday(year, 2, 0, 3),       # Presidents Day
+        _easter_sunday(year) - timedelta(days=2),
+        _last_weekday(year, 5, 0),         # Memorial Day
+        _observed_holiday(date(year, 7, 4)),
+        _nth_weekday(year, 9, 0, 1),       # Labor Day
+        _nth_weekday(year, 11, 3, 4),      # Thanksgiving
+        _observed_holiday(date(year, 12, 25)),
+    }
+    if year >= 2022:
+        holidays.add(_observed_holiday(date(year, 6, 19)))
+    return holidays
+
+
+def _next_nyse_session(signal_date):
+    day = signal_date + timedelta(days=1)
+    while day.weekday() >= 5 or day in _nyse_holidays(day.year):
+        day += timedelta(days=1)
+    return day
+
+
+def _analysis_is_on_time(signal_date, analysis_date, completed_at=None):
+    """El análisis puede completarse hasta el Open T+1, nunca después."""
+    try:
+        signal = date.fromisoformat(str(signal_date)[:10])
+        analysis = date.fromisoformat(str(analysis_date)[:10])
+    except (TypeError, ValueError):
+        return False
+    if analysis <= signal:
+        return True
+    if analysis != _next_nyse_session(signal):
+        return False
+    completed_at = completed_at or datetime.now(timezone.utc)
+    if completed_at.tzinfo is None:
+        completed_at = completed_at.replace(tzinfo=timezone.utc)
+    completed_ny = completed_at.astimezone(NEW_YORK)
+    return completed_ny.date() == analysis and completed_ny.time() < time(9, 30)
 
 
 def _setup_key(strategy_version, ticker, signal_date):
@@ -717,7 +798,8 @@ def control_center_upsert_analysis_payload(payload):
     state = _migrate_control_center_state(state)
 
     inserted, updated, unchanged, ignored = [], [], [], []
-    now = datetime.now().isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
     for position in positions:
         if not isinstance(position, dict):
             continue
@@ -773,7 +855,9 @@ def control_center_upsert_analysis_payload(payload):
                        if trade_item.get("status") == "CLOSED"), None)
         cancelled = next((trade_item for trade_item in setup_operations
                           if trade_item.get("status") == "CANCELLED"), None)
-        on_time = current["analysisDate"] <= current["signalDate"]
+        on_time = _analysis_is_on_time(
+            current["signalDate"], current["analysisDate"], now_dt
+        )
         operable = current["verdict"] in OPERABLE_VERDICTS
         if closed:
             current["route"] = "REGISTRY"
