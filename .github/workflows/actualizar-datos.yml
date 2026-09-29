@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "main_ingesta.py"
+      - "modules/shadow_tracker.py"
       - "modules/ingesta/**"
       - ".github/workflows/actualizar-datos.yml"
   workflow_dispatch:
@@ -66,11 +67,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Eliminar exportación anterior
+      - name: Preparar directorio de datos
         if: steps.horario.outputs.should_run == 'true'
         run: |
           mkdir -p data/master
-          rm -f data/master/sp500_full_export_*.csv
           rm -f data/master/market_context.json
 
       - name: Ejecutar ingesta completa
@@ -79,6 +79,8 @@ jobs:
           MAX_EMPRESAS: "503"
           YEARS_HISTORY: "2"
           PYTHONUNBUFFERED: "1"
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         run: python main_ingesta.py
 
       - name: Comprobar resultado
@@ -96,7 +98,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           TMP_DIR="$(mktemp -d)"
-          cp data/master/sp500_full_export_*.csv "$TMP_DIR/"
+          find data/master -maxdepth 1 -name 'sp500_full_export_*.csv' -print0 | sort -z | tail -z -n 1 | xargs -0 -I{} cp "{}" "$TMP_DIR/"
           cp data/master/market_context.json "$TMP_DIR/market_context.json"
 
           MAX_INTENTOS=5
