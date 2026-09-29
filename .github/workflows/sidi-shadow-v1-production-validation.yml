@@ -13,6 +13,17 @@ on:
       - 'test_control_center_ingest.py'
       - 'test_control_center_contract.py'
       - '.github/workflows/sidi-shadow-v1-production-validation.yml'
+  pull_request:
+    paths:
+      - 'main_ingesta.py'
+      - 'servidor_local.py'
+      - 'stock-radar-v3.html'
+      - 'modules/shadow_tracker.py'
+      - 'modules/ingesta/**'
+      - 'test_shadow_tracker.py'
+      - 'test_control_center_ingest.py'
+      - 'test_control_center_contract.py'
+      - '.github/workflows/sidi-shadow-v1-production-validation.yml'
   workflow_dispatch:
 
 jobs:
@@ -21,8 +32,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -46,8 +55,10 @@ jobs:
                   print('PASS', module.__name__, name)
           PY
       - name: Run 20 ticker live ingestion
+        if: github.event_name != 'pull_request'
         run: python main_ingesta.py --test
       - name: Assert frozen strategy contract
+        if: github.event_name != 'pull_request'
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -92,6 +103,7 @@ jobs:
           print(f'OK production: {len(df)} rows, {ready} context-ready, {len(full)} FULL')
           PY
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
           name: sidi-shadow-v1-production-validation
           path: |
