@@ -1,6 +1,6 @@
 {
-  "date": "2026-10-01 14:59",
-  "sidi_strategy_version": "SIDI_SHADOW_V1",
+  "date": "2026-10-01 18:09",
+  "sidi_strategy_version": "SIDI_INTRADAY_V2",
   "spy_price": 762.63,
   "spy_ma20": 764.02,
   "spy_ma50": 761.19,
@@ -16,9 +16,9 @@
   "market_regime": "ALCISTA FUERTE",
   "regime_color": "#22c55e",
   "regime_icon": "🟢",
-  "regime_desc": "ALCISTA FUERTE. Régimen descriptivo; SIDI_SHADOW_V1 usa SPY20 como puerta operativa.",
+  "regime_desc": "ALCISTA FUERTE. Régimen descriptivo; SIDI_INTRADAY_V2 usa SPY20 como puerta operativa.",
   "regime_score": 10,
-  "filter_rec": "SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
+  "filter_rec": "SIDI_INTRADAY_V2: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
   "history": [
     {
       "date": "2025-10-02",
@@ -214,7 +214,7 @@
     },
     {
       "date": "2025-11-17",
-      "close": 658.56,
+      "close": 658.57,
       "ma200": 604.55,
       "rsi": 32.1
     },
