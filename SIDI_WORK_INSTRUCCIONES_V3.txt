@@ -285,14 +285,6 @@ Realiza una única investigación macro común por cada ejecución SIDI.
 
 No repitas la misma investigación macro empresa por empresa.
 
-REGISTRO AUTOMÁTICO
-
-Cuando el JSON esté terminado, envía exactamente el objeto completo mediante POST con Content-Type application/json a:
-
-https://render-s7w8.onrender.com/api/sidi/work-result
-
-Comprueba que la respuesta contenga "ok": true y "control_center". Esta acción registra el veredicto en la base maestra y crea una operación PLANNED únicamente cuando el veredicto sea operable y la ventana intradía siga abierta.
-
 Analiza como mínimo:
 
 - política monetaria;
@@ -305,6 +297,14 @@ Analiza como mínimo:
 Después aplica ese mismo snapshot macro a cada empresa según su sensibilidad específica.
 
 El Macro Filter solo puede MANTENER o DEGRADAR el veredicto individual. Nunca puede mejorarlo.
+
+REGISTRO AUTOMÁTICO
+
+Cuando el JSON esté terminado, envía exactamente el objeto completo mediante POST con Content-Type application/json a:
+
+https://render-s7w8.onrender.com/api/sidi/work-result
+
+Comprueba que la respuesta contenga "ok": true y "control_center". Esta acción registra el veredicto en la base maestra y crea una operación PLANNED únicamente cuando el veredicto sea operable y la ventana intradía siga abierta.
 
 MEMORIA SIDI
 
