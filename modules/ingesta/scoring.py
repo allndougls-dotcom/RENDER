@@ -1,6 +1,6 @@
 """Score fundamental normalizado por sector + Warning Signs.
 
-SIDI_SHADOW_V1
+SIDI_INTRADAY_V2
 ---------------
 ``full_setup`` representa la estrategia congelada tras la validación 2023-2026:
 - DD60 >= 12% (sobre máximo de cierre de 60 sesiones)
@@ -36,7 +36,7 @@ except ImportError:
     def add_indicative_trade_plan(df):
         return df
 
-SIDI_STRATEGY_VERSION = "SIDI_SHADOW_V1"
+SIDI_STRATEGY_VERSION = "SIDI_INTRADAY_V2"
 SIDI_MIN_FUND_SCORE = 6.5
 SIDI_MAX_SPY20 = 1.0
 SIDI_MAX_ABNORMAL20 = -10.0
@@ -176,7 +176,7 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
 
     def horizon(row):
         if pd.isna(row.get("rsi_14")): return "N/A"
-        if bool(row.get("full_setup", False)): return "SIDI_SHADOW_V1: max 7 sesiones"
+        if bool(row.get("full_setup", False)): return "SIDI_INTRADAY_V2: max 7 sesiones"
         if row["rsi_14"] < 30 and row.get("near_support") and row.get("macd_improving"): return "5-10d"
         bias = row.get("trend_bias", "")
         return "10-18d" if bias == "ALCISTA" else ("3-7d" if bias == "BAJISTA" else "7-15d")
@@ -199,12 +199,12 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
     print(f"  ✅ Scoring completado · {SIDI_STRATEGY_VERSION}")
     print(f"     Score combinado medio : {df['combined_score'].mean():.2f}/10")
     print(f"     Fund score medio      : {df['fund_score'].mean():.2f}/10")
-    print(f"     FULL Shadow V1        : {setups}")
+    print(f"     FULL Intraday V2        : {setups}")
     print(f"     FULL legacy (audit)   : {legacy_setups}")
     cols = ["ticker", "sector", "fund_score", "combined_score", "drawdown_60d", "rsi_14", "spy_return_20d", "abnormal_return_20d"]
     cols = [c for c in cols if c in df.columns]
     if setups > 0:
-        print("\n  📊 FULL SIDI_SHADOW_V1:")
+        print("\n  📊 FULL SIDI_INTRADAY_V2:")
         print(df[df["full_setup"] == True][cols].head(10).to_string(index=False))
     else:
         print("\n  📊 Sin FULL hoy · Top 10 por score combinado:")

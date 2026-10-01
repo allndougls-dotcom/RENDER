@@ -9,7 +9,7 @@
 ║     python main_ingesta.py --solo-earn  → solo earnings dates   ║
 ║                                                                    ║
 ║   OPTIMIZADO PARA MEMORIA (plan gratuito Render, límite 512MB): ║
-║   - El contexto SIDI_SHADOW_V1 (SPY20 + Abnormal20) se calcula  ║
+║   - El contexto SIDI_INTRADAY_V2 (SPY20 + Abnormal20) se calcula  ║
 ║     antes de liberar all_prices porque necesita las series       ║
 ║     históricas ya descargadas.                                  ║
 ║   - gc.collect() forzado entre pasos para recuperar memoria.    ║
@@ -92,17 +92,17 @@ def main():
         print("PASO 4/7 · Indicadores técnicos")
         df_tech = calcular_tecnicos(all_prices)
 
-        print("\n  ── Contexto SIDI_SHADOW_V1 ──")
+        print("\n  ── Contexto SIDI_INTRADAY_V2 ──")
         df_sidi_ctx = calcular_contexto_sidi(all_prices, sp500)
         if len(df_sidi_ctx) > 0:
             df_tech = df_tech.merge(df_sidi_ctx, on="ticker", how="left")
 
-        print("\n  ── Registro automático SIDI_SHADOW_V1 ──")
+        print("\n  ── Histórico automático SIDI_SHADOW_V1 ──")
         try:
             shadow_result = update_shadow_tracker(all_prices)
             if shadow_result.get("ok"):
                 print(
-                    "  ✅ Shadow actualizado · "
+                    "  ✅ Shadow V1 histórico actualizado · "
                     f"{shadow_result['signals']} señales · "
                     f"{shadow_result['open']} abiertas · "
                     f"{shadow_result['closed']} cerradas"

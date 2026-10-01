@@ -56,8 +56,8 @@ CONTROL_CENTER_DEFAULT_SETTINGS = {
     "capital": 10_000,
     "riskPct": 1.5,
     "riskMax": 150,
-    "maxPositions": 5,
-    "portfolioRiskPct": 7.5,
+    "maxPositions": 3,
+    "portfolioRiskPct": 4.5,
     "warnDays": 4,
     "expireDays": 8,
     "earningsBlockDays": 7,
@@ -168,8 +168,10 @@ def _row_to_sidi_company(row):
     price = _float(row.get("price"))
     atr = _float(row.get("atr_14"))
     spy_vs200 = _float(row.get("spy_vs200"))
+    strategy_version = row.get("sidi_strategy_version") or "SIDI_INTRADAY_V2"
     stop_loss = round(price * 0.95, 4) if price is not None else None
-    tp_v1 = round(price + 0.75 * atr, 4) if price is not None and atr is not None else None
+    tp1_indicative = round(price + atr, 4) if price is not None and atr is not None else None
+    tp2_indicative = round(price + 1.5 * atr, 4) if price is not None and atr is not None else None
     warnings_raw = (row.get("warnings") or "").strip()
     warnings = [] if not warnings_raw or warnings_raw.upper() == "OK" else _split_pipe(warnings_raw)
     roe = _float(row.get("roe"))
@@ -188,7 +190,7 @@ def _row_to_sidi_company(row):
         "selection": {
             "setup_hot": _bool(row.get("setup_hot")),
             "full_setup": _bool(row.get("full_setup")),
-            "strategy_version": row.get("sidi_strategy_version") or "SIDI_SHADOW_V1",
+            "strategy_version": strategy_version,
             "gate_failures": row.get("sidi_gate_failures") or None,
             "combined_score": _float(row.get("combined_score")),
             "horizon": row.get("horizon") or None,
@@ -219,20 +221,29 @@ def _row_to_sidi_company(row):
             "atr": atr,
         },
         "risk_plan": {
-            "strategy_version": row.get("sidi_strategy_version") or "SIDI_SHADOW_V1",
-            "entry_rule": row.get("sidi_entry_rule") or "NEXT_SESSION_OPEN",
-            "entry_status": row.get("sidi_entry_status") or "PENDING_NEXT_OPEN",
+            "strategy_version": strategy_version,
+            "entry_rule": row.get("sidi_entry_rule") or "POST_ANALYSIS_ACTUAL_FILL",
+            "entry_status": row.get("sidi_entry_status") or "PENDING_ANALYSIS",
+            "entry_reference_source": row.get("sidi_entry_reference_source") or "LIVE_QUOTE_AT_ANALYSIS",
+            "actual_fill_required": _bool(row.get("sidi_actual_fill_required"), True),
             "atr14_signal": _float(row.get("sidi_atr14_signal") or row.get("atr_14")),
-            "target_atr_multiple": _float(row.get("sidi_tp_atr_mult"), 0.75),
+            "target_tp1_atr_multiple": _float(row.get("sidi_tp1_atr_mult"), 1.0),
+            "target_tp2_atr_multiple": _float(row.get("sidi_tp2_atr_mult"), 1.5),
             "stop_loss_pct": _float(row.get("sidi_sl_pct"), -5.0),
             "time_stop_sessions": _int(row.get("sidi_time_stop_sessions"), 7),
             "risk_pct": _float(row.get("sidi_risk_pct"), 1.5),
-            "max_positions": _int(row.get("sidi_max_positions"), 5),
+            "max_positions": _int(row.get("sidi_max_positions"), 3),
+            "partial_exit_rule": row.get("sidi_partial_exit_rule") or "SELL_50_PCT_AT_TP1_REST_AT_TP2",
+            "after_tp1_stop_rule": row.get("sidi_after_tp1_stop_rule") or "MOVE_REMAINDER_TO_BREAK_EVEN",
             "gap_stop_rule": row.get("sidi_gap_stop_rule") or "EXIT_AT_OPEN_IF_OPEN_BELOW_SL",
             "intraday_conflict_rule": row.get("sidi_intraday_conflict_rule") or "SL_FIRST",
             "stop_loss_indicative_from_signal_close": stop_loss,
-            "target_indicative_from_signal_close": tp_v1,
-            "note": "Exact TP/SL are fixed from actual Open T+1",
+            "target_tp1_indicative_from_signal_close": tp1_indicative,
+            "target_tp2_indicative_from_signal_close": tp2_indicative,
+            "note": (
+                "Signal-close levels are indicative. Final SL/TP1/TP2 and sizing "
+                "use the actual broker fill after the qualitative verdict."
+            ),
         },
         "fundamentals": {
             "fundamental_score": _float(row.get("fund_score")),
@@ -283,6 +294,9 @@ def _row_to_sidi_company(row):
         },
         "data_metadata": {
             "data_vintage": row.get("data_vintage") or None,
+            "price_date": row.get("price_date") or None,
+            "ingestion_timing": "NYSE_OPEN_PLUS_5_MINUTES",
+            "analysis_window": "SAME_SESSION_AFTER_INGESTION",
             "source": "SIDI master CSV",
         },
     }
@@ -468,7 +482,7 @@ def registro_delete_all():
     conn.commit()
 
 
-CONTROL_CENTER_SCHEMA_VERSION = 5
+CONTROL_CENTER_SCHEMA_VERSION = 6
 OPERABLE_VERDICTS = {"VALIDADA", "VALIDADA CON CONDICIONES"}
 ACTIVE_OPERATION_STATUSES = {"PLANNED", "OPEN", "TP1"}
 NEW_YORK = ZoneInfo("America/New_York")
@@ -536,7 +550,7 @@ def _next_nyse_session(signal_date):
 
 
 def _analysis_is_on_time(signal_date, analysis_date, completed_at=None):
-    """El análisis puede completarse hasta el Open T+1, nunca después."""
+    """Compatibilidad histórica de SIDI_SHADOW_V1: hasta el Open T+1."""
     try:
         signal = date.fromisoformat(str(signal_date)[:10])
         analysis = date.fromisoformat(str(analysis_date)[:10])
@@ -553,6 +567,40 @@ def _analysis_is_on_time(signal_date, analysis_date, completed_at=None):
     return completed_ny.date() == analysis and completed_ny.time() < time(9, 30)
 
 
+def _analysis_route_timing(strategy_version, signal_date, analysis_date, completed_at=None):
+    """Devuelve (operable_ahora, estado, motivo) sin fabricar entradas pasadas."""
+    strategy = str(strategy_version or "").upper()
+    if strategy != "SIDI_INTRADAY_V2":
+        on_time = _analysis_is_on_time(signal_date, analysis_date, completed_at)
+        return (
+            on_time,
+            "ON_TIME" if on_time else "LATE_ANALYSIS",
+            "AUTO_VERDICT_OPERABLE" if on_time else "ANALYSIS_LATE",
+        )
+
+    try:
+        signal = date.fromisoformat(str(signal_date)[:10])
+        analysis = date.fromisoformat(str(analysis_date)[:10])
+    except (TypeError, ValueError):
+        return False, "INVALID_SIGNAL_DATE", "INVALID_SIGNAL_DATE"
+
+    expected_session = _next_nyse_session(signal)
+    if analysis != expected_session:
+        return False, "STALE_SIGNAL", "ANALYSIS_NOT_SIGNAL_SESSION"
+
+    completed_at = completed_at or datetime.now(timezone.utc)
+    if completed_at.tzinfo is None:
+        completed_at = completed_at.replace(tzinfo=timezone.utc)
+    completed_ny = completed_at.astimezone(NEW_YORK)
+    if completed_ny.date() != analysis:
+        return False, "STALE_SIGNAL", "ANALYSIS_NOT_SIGNAL_SESSION"
+    if completed_ny.time() < time(9, 35):
+        return False, "WAITING_MARKET_DATA", "ANALYSIS_BEFORE_INGESTION"
+    if completed_ny.time() >= time(15, 45):
+        return False, "MARKET_CLOSED", "ANALYSIS_AFTER_ENTRY_WINDOW"
+    return True, "ACTIONABLE_INTRADAY", "AUTO_VERDICT_OPERABLE_INTRADAY"
+
+
 def _setup_key(strategy_version, ticker, signal_date):
     return "|".join([
         str(strategy_version or "LEGACY").upper(),
@@ -562,10 +610,14 @@ def _setup_key(strategy_version, ticker, signal_date):
 
 
 def _migrate_control_center_state(state):
-    """Migra V3/V4 a V5 sin borrar históricos ni operaciones LIVE."""
+    """Migra a V6 sin borrar históricos ni operaciones LIVE."""
     if not isinstance(state, dict):
         state = {}
+    previous_schema = _int(state.get("schemaVersion"), 0) or 0
     state["settings"] = {**CONTROL_CENTER_DEFAULT_SETTINGS, **(state.get("settings") or {})}
+    if previous_schema < 6:
+        state["settings"]["maxPositions"] = 3
+        state["settings"]["portfolioRiskPct"] = 4.5
     analyses = state.get("analyses") if isinstance(state.get("analyses"), list) else []
     trades = state.get("trades") if isinstance(state.get("trades"), list) else []
 
@@ -732,11 +784,23 @@ def _control_center_analysis(position, analysis_date):
 
     strategy_version = str(_first_value(
         position.get("strategy_version"), trade.get("strategy_version"),
-        risk.get("strategy_version"), selection.get("strategy_version"), "SIDI_SHADOW_V1",
+        risk.get("strategy_version"), selection.get("strategy_version"),
+        "SIDI_INTRADAY_V2",
     ))
+    is_intraday_v2 = strategy_version.upper() == "SIDI_INTRADAY_V2"
     full_setup = _bool(_first_value(
         position.get("full_setup"), position.get("sidi_full_setup"), selection.get("full_setup"),
     ))
+    entry_reference_eur = _float(_first_value(
+        trade.get("entry_reference_eur"), position.get("entry_reference_eur"),
+        trade.get("entry_ideal_eur"), position.get("entry_ideal_eur"),
+        price_eur if is_intraday_v2 else None,
+    ), 0.0)
+    entry_reference_usd = _float(_first_value(
+        trade.get("entry_reference_usd"), position.get("entry_reference_usd"),
+        price_usd if is_intraday_v2 else None,
+    ), 0.0)
+
     normalized = {
         "date": date_value or datetime.now().strftime("%Y-%m-%d"),
         "analysisDate": date_value or datetime.now().strftime("%Y-%m-%d"),
@@ -747,6 +811,12 @@ def _control_center_analysis(position, analysis_date):
         "subsector": str(position.get("subsector") or ""),
         "priceEur": price_eur,
         "priceUsd": price_usd,
+        "signalCloseUsd": _float(_first_value(position.get("signal_close_usd"), technical.get("price")), 0.0),
+        "marketOpenUsd": _float(_first_value(position.get("market_open_usd"), position.get("day_open")), 0.0),
+        "entryReferenceEur": entry_reference_eur,
+        "entryReferenceUsd": entry_reference_usd,
+        "actualFillEur": _float(_first_value(trade.get("actual_fill_eur"), position.get("actual_fill_eur")), 0.0),
+        "actualFillUsd": _float(_first_value(trade.get("actual_fill_usd"), position.get("actual_fill_usd")), 0.0),
         "dd60": _float(_first_value(position.get("dd60d_pct"), position.get("dd60"), position.get("drawdown_60d_pct")), 0.0),
         "rsi": _float(_first_value(position.get("rsi_14"), position.get("rsi")), 0.0),
         "newsScore": _float(_first_value(position.get("news_score"), position.get("score")), 0.0),
@@ -757,8 +827,12 @@ def _control_center_analysis(position, analysis_date):
         "strategyVersion": strategy_version,
         "fullSetup": full_setup,
         "atr14Eur": atr_eur,
-        "entryRule": str(_first_value(position.get("entry_rule"), risk.get("entry_rule"), "NEXT_SESSION_OPEN" if strategy_version == "SIDI_SHADOW_V1" else "")),
-        "entry": _float(_first_value(trade.get("entry_ideal_eur"), position.get("entry_ideal_eur")), 0.0),
+        "entryRule": str(_first_value(
+            position.get("entry_rule"), trade.get("entry_rule"), risk.get("entry_rule"),
+            "POST_ANALYSIS_ACTUAL_FILL" if is_intraday_v2 else
+            ("NEXT_SESSION_OPEN" if strategy_version.upper() == "SIDI_SHADOW_V1" else ""),
+        )),
+        "entry": entry_reference_eur,
         "entryAlt": _float(_first_value(trade.get("entry_alternative_eur"), position.get("entry_alternative_eur")), 0.0),
         "sl": _float(_first_value(trade.get("stop_loss_eur"), position.get("stop_loss_eur")), 0.0),
         "tp1": _float(_first_value(trade.get("tp_eur"), trade.get("tp1_eur"), position.get("tp_eur"), position.get("tp1_eur")), 0.0),
@@ -806,10 +880,11 @@ def control_center_upsert_analysis_payload(payload):
         analysis = _control_center_analysis(position, analysis_date)
         if not analysis:
             continue
-        if (analysis["strategyVersion"].upper() == "SIDI_SHADOW_V1"
+        if (analysis["strategyVersion"].upper() in {"SIDI_SHADOW_V1", "SIDI_INTRADAY_V2"}
                 and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", analysis["signalDate"])):
             raise ValueError(
-                f"signal_date obligatorio para {analysis['ticker']} en SIDI_SHADOW_V1"
+                f"signal_date obligatorio para {analysis['ticker']} en "
+                f"{analysis['strategyVersion']}"
             )
         if not analysis["fullSetup"]:
             ignored.append(analysis["ticker"])
@@ -855,22 +930,23 @@ def control_center_upsert_analysis_payload(payload):
                        if trade_item.get("status") == "CLOSED"), None)
         cancelled = next((trade_item for trade_item in setup_operations
                           if trade_item.get("status") == "CANCELLED"), None)
-        on_time = _analysis_is_on_time(
-            current["signalDate"], current["analysisDate"], now_dt
+        actionable, timing_status, timing_reason = _analysis_route_timing(
+            current["strategyVersion"], current["signalDate"],
+            current["analysisDate"], now_dt,
         )
         operable = current["verdict"] in OPERABLE_VERDICTS
         if closed:
             current["route"] = "REGISTRY"
             current["routingReason"] = "LIVE_CLOSED"
-            current["timingStatus"] = "ON_TIME" if on_time else "LATE_ANALYSIS"
+            current["timingStatus"] = timing_status
         elif active and active.get("status") in {"OPEN", "TP1"}:
             current["route"] = "OPERATIONS"
             current["routingReason"] = "ACTIVE_OPERATION"
-            current["timingStatus"] = "ON_TIME" if on_time else "LATE_ANALYSIS"
-        elif operable and on_time and current.get("atr14Eur"):
+            current["timingStatus"] = timing_status
+        elif operable and actionable and current.get("atr14Eur"):
             current["route"] = "OPERATIONS"
-            current["routingReason"] = "AUTO_VERDICT_OPERABLE"
-            current["timingStatus"] = "ON_TIME"
+            current["routingReason"] = timing_reason
+            current["timingStatus"] = timing_status
             if not active and cancelled:
                 cancelled["status"] = "PLANNED"
                 cancelled["createdAt"] = now
@@ -885,15 +961,13 @@ def control_center_upsert_analysis_payload(payload):
                 })
         else:
             current["route"] = "REGISTRY"
+            current["timingStatus"] = timing_status
             if not operable:
                 current["routingReason"] = "VERDICT_" + current["verdict"].replace(" ", "_")
-                current["timingStatus"] = "ON_TIME" if on_time else "LATE_ANALYSIS"
-            elif not on_time:
-                current["routingReason"] = "ANALYSIS_LATE"
-                current["timingStatus"] = "LATE_ANALYSIS"
+            elif not actionable:
+                current["routingReason"] = timing_reason
             else:
                 current["routingReason"] = "MISSING_ATR"
-                current["timingStatus"] = "ON_TIME"
             if active and active.get("status") == "PLANNED":
                 active["status"] = "CANCELLED"
                 active["cancelReason"] = current["routingReason"]
@@ -1258,7 +1332,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def handle_root(self):
         _, rows = load_market_context()
         self.send_json({
-            "service": "STOCK-RADAR Cloud API", "status": "ok", "version": "1.3", "empresas": len(rows),
+            "service": "STOCK-RADAR Cloud API", "status": "ok", "version": "1.4", "empresas": len(rows),
             "registro_backend": "turso" if turso_disponible() else "no configurado (usa localStorage)",
             "sidi_cache_backend": "turso" if turso_disponible() else "no configurado", "updated": datetime.now().isoformat(),
             "endpoints": ["/status","/data","/market","/hot","/trigger","/mobile","/api/latest-csv",
