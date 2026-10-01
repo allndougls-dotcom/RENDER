@@ -1,31 +1,25 @@
 {
-  "date": "2026-09-30 18:29",
+  "date": "2026-10-01 00:01",
   "sidi_strategy_version": "SIDI_SHADOW_V1",
-  "spy_price": 764.2,
-  "spy_ma20": 763.89,
-  "spy_ma50": 760.87,
-  "spy_ma200": 715.71,
-  "spy_rsi": 53.1,
-  "spy_return_20d": -0.1242,
-  "sidi_spy20_gate": true,
-  "spy_vs200": 6.78,
-  "spy_dd52": -1.51,
-  "spy_ma200_slope": 1.358,
-  "spy_vol_ratio": 0.99,
-  "vix": 16.04,
-  "market_regime": "ALCISTA FUERTE",
-  "regime_color": "#22c55e",
-  "regime_icon": "🟢",
-  "regime_desc": "ALCISTA FUERTE. Régimen descriptivo; SIDI_SHADOW_V1 usa SPY20 como puerta operativa.",
-  "regime_score": 10,
+  "spy_price": NaN,
+  "spy_ma20": NaN,
+  "spy_ma50": NaN,
+  "spy_ma200": NaN,
+  "spy_rsi": NaN,
+  "spy_return_20d": null,
+  "sidi_spy20_gate": false,
+  "spy_vs200": NaN,
+  "spy_dd52": NaN,
+  "spy_ma200_slope": NaN,
+  "spy_vol_ratio": 1.0,
+  "vix": 16.34,
+  "market_regime": "BAJISTA",
+  "regime_color": "#ef4444",
+  "regime_icon": "🔴",
+  "regime_desc": "BAJISTA. Régimen descriptivo; SIDI_SHADOW_V1 usa SPY20 como puerta operativa.",
+  "regime_score": 1,
   "filter_rec": "SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
   "history": [
-    {
-      "date": "2025-10-01",
-      "close": 661.32,
-      "ma200": 591.07,
-      "rsi": 68.5
-    },
     {
       "date": "2025-10-02",
       "close": 662.08,
@@ -1519,6 +1513,12 @@
       "close": 764.2,
       "ma200": 715.71,
       "rsi": 53.1
+    },
+    {
+      "date": "2026-09-30",
+      "close": NaN,
+      "ma200": null,
+      "rsi": null
     }
   ]
 }
