@@ -133,7 +133,7 @@ def test_v4_migration_links_operation_and_removes_copied_analysis_fields():
         }],
     })
     analysis, operation = state["analyses"][0], state["trades"][0]
-    assert state["schemaVersion"] == 5
+    assert state["schemaVersion"] == 6
     assert analysis["setupKey"] == "SIDI_SHADOW_V1|AAA|2026-09-28"
     assert analysis["route"] == "OPERATIONS"
     assert operation["setupId"] == "A-1"
@@ -268,3 +268,35 @@ def test_closed_operation_stays_in_registry_after_analysis_revision():
         assert state["analyses"][0]["routingReason"] == "LIVE_CLOSED"
     finally:
         server.get_turso_conn = original
+
+
+def test_intraday_v2_is_actionable_after_ingestion_and_before_entry_cutoff():
+    during_market = datetime(2026, 9, 29, 15, 30, tzinfo=timezone.utc)
+    actionable, status, reason = server._analysis_route_timing(
+        "SIDI_INTRADAY_V2", "2026-09-28", "2026-09-29", during_market
+    )
+    assert actionable is True
+    assert status == "ACTIONABLE_INTRADAY"
+    assert reason == "AUTO_VERDICT_OPERABLE_INTRADAY"
+
+
+def test_intraday_v2_never_creates_retroactive_entry_after_cutoff():
+    after_window = datetime(2026, 9, 29, 19, 45, tzinfo=timezone.utc)
+    actionable, status, reason = server._analysis_route_timing(
+        "SIDI_INTRADAY_V2", "2026-09-28", "2026-09-29", after_window
+    )
+    assert actionable is False
+    assert status == "MARKET_CLOSED"
+    assert reason == "ANALYSIS_AFTER_ENTRY_WINDOW"
+
+
+def test_v6_migration_applies_three_position_limit():
+    state = server._migrate_control_center_state({
+        "schemaVersion": 5,
+        "settings": {"maxPositions": 5, "portfolioRiskPct": 7.5},
+        "analyses": [],
+        "trades": [],
+    })
+    assert state["schemaVersion"] == 6
+    assert state["settings"]["maxPositions"] == 3
+    assert state["settings"]["portfolioRiskPct"] == 4.5

@@ -110,13 +110,16 @@ def _load_new_signals(path: Path) -> list[dict]:
         for row in csv.DictReader(handle):
             if not _bool(row.get("full_setup")):
                 continue
+            strategy_version = row.get("sidi_strategy_version") or STRATEGY_VERSION
+            if strategy_version != STRATEGY_VERSION:
+                continue
             atr = _float(row.get("sidi_atr14_signal") or row.get("atr_14"))
             if not atr or atr <= 0:
                 continue
             out.append({
                 "ticker": (row.get("ticker") or "").strip().upper(),
                 "signal_date": _signal_date(row, path),
-                "strategy_version": row.get("sidi_strategy_version") or STRATEGY_VERSION,
+                "strategy_version": strategy_version,
                 "company": row.get("name"),
                 "sector": row.get("sector"),
                 "combined_score": _float(row.get("combined_score"), 0.0),

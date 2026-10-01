@@ -1,4 +1,4 @@
-"""Live market/sector context required by SIDI_SHADOW_V1.
+"""Live market/sector context required by SIDI_INTRADAY_V2.
 
 This module computes, at the close of signal day T:
 - ``spy_return_20d``: compounded SPY return over the latest 20 sessions.
@@ -12,7 +12,7 @@ Betas/alpha are estimated on sessions [-140:-20]. The recent 20-session
 abnormal return is realised minus model-implied return over [-20:].
 
 If data are incomplete, ``sidi_context_ready`` is False and the ticker cannot
-become a FULL SIDI_SHADOW_V1 setup.
+become a FULL SIDI_INTRADAY_V2 setup.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-STRATEGY_VERSION = "SIDI_SHADOW_V1"
+STRATEGY_VERSION = "SIDI_INTRADAY_V2"
 TRAIN_SESSIONS = 120
 RECENT_SESSIONS = 20
 TOTAL_SESSIONS = TRAIN_SESSIONS + RECENT_SESSIONS
@@ -131,7 +131,7 @@ def _abnormal20(stock_close: pd.Series, spy_close: pd.Series,
 
 
 def calcular_contexto_sidi(all_prices: dict, sp500: pd.DataFrame) -> pd.DataFrame:
-    print("  ⏳ SIDI_SHADOW_V1 · calculando SPY20 + Abnormal20...")
+    print("  ⏳ SIDI_INTRADAY_V2 · calculando SPY20 + Abnormal20...")
     benchmarks = _download_benchmarks()
     spy_close = benchmarks.get("SPY", pd.Series(dtype=float))
     spy20 = _spy20(spy_close)

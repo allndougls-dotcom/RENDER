@@ -8,9 +8,9 @@ def _html():
     return HTML.read_text(encoding="utf-8")
 
 
-def test_v5_navigation_has_registry_and_no_candidates():
+def test_v6_navigation_has_registry_and_no_candidates():
     html = _html()
-    assert "const CC_SCHEMA_VERSION=5" in html
+    assert "const CC_SCHEMA_VERSION=6" in html
     assert 'data-ccview="registry"' in html
     assert 'id="view-registry"' in html
     assert 'data-ccview="candidates"' not in html
@@ -18,10 +18,13 @@ def test_v5_navigation_has_registry_and_no_candidates():
     assert 'data-section="registro"' not in html
 
 
-def test_work_prompt_preserves_signal_date():
+def test_work_prompt_preserves_signal_date_and_uses_intraday_v2():
     html = _html()
     assert '"signal_date": "YYYY-MM-DD (copiar sin cambios del JSON de entrada)"' in html
     assert "forma parte de la clave única del setup" in html
+    assert '"strategy_version": "SIDI_INTRADAY_V2"' in html
+    assert '"entry_rule": "POST_ANALYSIS_ACTUAL_FILL"' in html
+    assert "actual_fill_eur" in html
 
 
 def test_operations_reference_setup_instead_of_copying_analysis():
