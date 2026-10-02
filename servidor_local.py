@@ -13,9 +13,9 @@ Variables de entorno:
     TURSO_AUTH_TOKEN
     UPDATE_TOKEN
     GITHUB_ACTIONS_TOKEN         (token fine-grained con Actions: write)
-    GITHUB_REPOSITORY            (opcional, default allndougls-dotcom/RENDER)
-    GITHUB_WORKFLOW_FILE         (opcional, default actualizar-datos.yml)
-    GITHUB_WORKFLOW_REF          (opcional, default main)
+    SIDI_GITHUB_REPOSITORY       (opcional, default allndougls-dotcom/RENDER)
+    SIDI_GITHUB_WORKFLOW_FILE    (opcional, default actualizar-datos.yml)
+    SIDI_GITHUB_WORKFLOW_REF     (opcional, default main)
     SIDI_FULL_REFRESH_DAYS       (opcional, default 7)
     SIDI_CACHE_WRITE_TOKEN       (opcional; si se define protege escrituras del cache)
     SIDI_CONTROL_CENTER_WRITE_TOKEN (opcional; por defecto usa el token del cache)
@@ -57,9 +57,9 @@ DATA_DIR = BASE_DIR / "data" / "master"
 UPDATE_TOKEN = os.environ.get("UPDATE_TOKEN", "")
 IS_RENDER = os.environ.get("RENDER", "").lower() == "true" or "RENDER" in os.environ
 GITHUB_ACTIONS_TOKEN = os.environ.get("GITHUB_ACTIONS_TOKEN", "")
-GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "allndougls-dotcom/RENDER")
-GITHUB_WORKFLOW_FILE = os.environ.get("GITHUB_WORKFLOW_FILE", "actualizar-datos.yml")
-GITHUB_WORKFLOW_REF = os.environ.get("GITHUB_WORKFLOW_REF", "main")
+GITHUB_REPOSITORY = os.environ.get("SIDI_GITHUB_REPOSITORY", "allndougls-dotcom/RENDER")
+GITHUB_WORKFLOW_FILE = os.environ.get("SIDI_GITHUB_WORKFLOW_FILE", "actualizar-datos.yml")
+GITHUB_WORKFLOW_REF = os.environ.get("SIDI_GITHUB_WORKFLOW_REF", "main")
 GITHUB_API_VERSION = "2022-11-28"
 _github_status_lock = threading.Lock()
 _github_dispatch_lock = threading.Lock()
