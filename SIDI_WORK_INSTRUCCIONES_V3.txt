@@ -175,16 +175,28 @@ verdict
 confidence
 data_quality
 decision
+strategy_version
+full_setup
+signal_date
+atr14_signal_usd
+atr14_signal_eur
 earnings_date_next
 fall_reason
 blockers
 penalties
 catalysts
+strengths
+weaknesses
+news_items
 thesis_short
 analysis_update
 trade_plan
 
-Para SIDI_INTRADAY_V2, `trade_plan` debe incluir además: strategy_version, entry_rule, entry_reference_usd, entry_reference_eur, actual_fill_usd, actual_fill_eur, atr14_signal, stop_loss_eur, tp1_eur, tp2_eur, shares, max_risk_eur, notional_eur y time_stop_sessions.
+`atr14_signal_usd` y `atr14_signal_eur` son obligatorios para todas las FULL, aunque el veredicto no sea operable y `trade_plan` sea null. Son necesarios para simular la cartera Shadow sin sesgo de selección.
+
+`news_items` debe ser una lista estructurada. Cada noticia debe contener, cuando esté disponible: `published_at`, `source`, `title`, `url`, `impact` y `summary`.
+
+Para SIDI_INTRADAY_V2, `trade_plan` debe incluir además: strategy_version, entry_rule, entry_reference_usd, entry_reference_eur, actual_fill_usd, actual_fill_eur, atr14_signal_usd, atr14_signal_eur, stop_loss_eur, tp1_eur, tp2_eur, shares, max_risk_eur, notional_eur y time_stop_sessions.
 
 `trade_plan` debe ser null para WATCHLIST, BLOQUEADA e INSUFICIENTE INFORMACIÓN.
 
@@ -306,24 +318,15 @@ https://render-s7w8.onrender.com/api/sidi/work-result
 
 Comprueba que la respuesta contenga "ok": true y "control_center". Esta acción registra el veredicto en la base maestra y crea una operación PLANNED únicamente cuando el veredicto sea operable y la ventana intradía siga abierta.
 
+El registro se organiza como un episodio único por oportunidad. Si el mismo ticker vuelve a aparecer como FULL al día siguiente mientras el episodio sigue activo, el POST añade una revisión a la misma ficha: no crea un duplicado. Todas las FULL reciben una simulación Shadow, incluso WATCHLIST, BLOQUEADA e INSUFICIENTE INFORMACIÓN. La cartera Shadow y las operaciones LIVE son independientes.
+
+No consideres completada la ejecución hasta que `control_center` confirme el ticker en `inserted`, `updated` o `unchanged`. Si el POST falla, informa del error y no afirmes que el veredicto quedó registrado.
+
 MEMORIA SIDI
 
-Al terminar cualquier ejecución SIDI del día —FULL, DELTA o REUSE— guarda el estado final de todas las posiciones procesadas en la memoria SIDI.
+El mismo POST a `/api/sidi/work-result` guarda también la memoria SIDI. No realices un segundo guardado manual ni envíes resultados parciales.
 
-Accede a:
-
-https://render-s7w8.onrender.com/api/sidi/analysis-cache/save
-
-Pega el JSON completo generado, incluyendo:
-
-- `sidi_excel_payload`
-- `research_sources`
-
-y pulsa “Guardar en Turso”.
-
-No guardes resultados parciales antes de terminar la ejecución.
-
-Si el guardado devuelve `ok: true`, considera la memoria actualizada correctamente.
+Si la respuesta devuelve `ok: true`, `saved` y `control_center`, considera actualizadas tanto la memoria como la base maestra.
 
 Antes de mostrar el JSON final al usuario, indica brevemente:
 
