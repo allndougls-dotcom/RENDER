@@ -1,6 +1,7 @@
 import copy
 import sqlite3
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import servidor_local as server
 
@@ -51,6 +52,27 @@ def _payload(verdict="VALIDADA"):
             }],
         }
     }
+
+
+def _payload_v2(verdict="WATCHLIST", signal_date="2026-09-28"):
+    payload = _payload(verdict)
+    position = payload["sidi_excel_payload"]["positions"][0]
+    position.update({
+        "signal_date": signal_date,
+        "strategy_version": "SIDI_INTRADAY_V2",
+        "entry_rule": "POST_ANALYSIS_ACTUAL_FILL",
+        "atr14_signal_usd": 4,
+        "atr14_signal_eur": 3.6,
+        "strengths": ["Cash flow"],
+        "weaknesses": ["Leverage"],
+        "news_items": [{
+            "published_at": "2026-09-28", "source": "Primary",
+            "title": "Results", "url": "https://example.com/results",
+            "impact": "POSITIVO", "summary": "Guidance maintained",
+        }],
+    })
+    payload["sidi_excel_payload"]["analysis_date"] = "2026-09-29"
+    return payload
 
 
 def test_work_payload_is_idempotent_and_preserves_live_trades():
@@ -133,7 +155,7 @@ def test_v4_migration_links_operation_and_removes_copied_analysis_fields():
         }],
     })
     analysis, operation = state["analyses"][0], state["trades"][0]
-    assert state["schemaVersion"] == 6
+    assert state["schemaVersion"] == 7
     assert analysis["setupKey"] == "SIDI_SHADOW_V1|AAA|2026-09-28"
     assert analysis["route"] == "OPERATIONS"
     assert operation["setupId"] == "A-1"
@@ -290,13 +312,70 @@ def test_intraday_v2_never_creates_retroactive_entry_after_cutoff():
     assert reason == "ANALYSIS_AFTER_ENTRY_WINDOW"
 
 
-def test_v6_migration_applies_three_position_limit():
+def test_v7_migration_applies_three_position_limit():
     state = server._migrate_control_center_state({
         "schemaVersion": 5,
         "settings": {"maxPositions": 5, "portfolioRiskPct": 7.5},
         "analyses": [],
         "trades": [],
     })
-    assert state["schemaVersion"] == 6
+    assert state["schemaVersion"] == 7
     assert state["settings"]["maxPositions"] == 3
     assert state["settings"]["portfolioRiskPct"] == 4.5
+
+
+def test_v2_daily_payloads_update_one_episode_and_keep_one_shadow():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        with patch.object(
+            server, "_analysis_route_timing",
+            return_value=(True, "ACTIONABLE_INTRADAY", "AUTO_VERDICT_OPERABLE_INTRADAY"),
+        ):
+            server.control_center_upsert_analysis_payload(_payload_v2("WATCHLIST", "2026-09-28"))
+            server.control_center_upsert_analysis_payload(_payload_v2("VALIDADA", "2026-09-29"))
+        state = server.control_center_get()["state"]
+        assert len(state["analyses"]) == 1
+        assert state["analyses"][0]["revisionCount"] == 2
+        assert state["analyses"][0]["verdict"] == "VALIDADA"
+        assert len(state["trades"]) == 1
+        assert conn.execute("SELECT COUNT(*) FROM sidi_setup_episodes").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM sidi_shadow_trades_v2").fetchone()[0] == 1
+    finally:
+        server.get_turso_conn = original
+
+
+def test_v7_cleanup_archives_old_active_state_and_keeps_a_backup():
+    conn = _memory_connection()
+    original = server.get_turso_conn
+    server.get_turso_conn = lambda: conn
+    try:
+        server.control_center_save({
+            "schemaVersion": 6,
+            "settings": dict(server.CONTROL_CENTER_DEFAULT_SETTINGS),
+            "analyses": [{
+                "id": "A-OLD", "date": "2026-09-28", "signalDate": "2026-09-28",
+                "ticker": "AAA", "strategyVersion": "SIDI_SHADOW_V1",
+                "verdict": "VALIDADA",
+            }],
+            "trades": [{"id": "T-OLD", "setupId": "A-OLD", "status": "PLANNED"}],
+        })
+        conn.execute(
+            "INSERT INTO sidi_shadow_signals "
+            "(ticker, signal_date, strategy_version, status) VALUES (?,?,?,?)",
+            ("AAA", "2026-09-28", "SIDI_SHADOW_V1", "WAITING_ENTRY"),
+        )
+        conn.commit()
+        result = server.control_center_cleanup_v7()
+        state = server.control_center_get()["state"]
+        assert result["archived_analyses"] == 1
+        assert result["archived_trades"] == 1
+        assert state["analyses"] == []
+        assert state["trades"] == []
+        assert state["archivedAnalyses"][0]["id"] == "A-OLD"
+        assert state["archivedTrades"][0]["status"] == "CANCELLED"
+        assert conn.execute("SELECT COUNT(*) FROM sidi_control_center_backups").fetchone()[0] == 1
+        assert conn.execute("SELECT status FROM sidi_shadow_signals").fetchone()[0] == "INVALID_MIGRATED_V7"
+    finally:
+        server.get_turso_conn = original

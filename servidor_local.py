@@ -12,6 +12,10 @@ Variables de entorno:
     TURSO_DATABASE_URL
     TURSO_AUTH_TOKEN
     UPDATE_TOKEN
+    GITHUB_ACTIONS_TOKEN         (token fine-grained con Actions: write)
+    GITHUB_REPOSITORY            (opcional, default allndougls-dotcom/RENDER)
+    GITHUB_WORKFLOW_FILE         (opcional, default actualizar-datos.yml)
+    GITHUB_WORKFLOW_REF          (opcional, default main)
     SIDI_FULL_REFRESH_DAYS       (opcional, default 7)
     SIDI_CACHE_WRITE_TOKEN       (opcional; si se define protege escrituras del cache)
     SIDI_CONTROL_CENTER_WRITE_TOKEN (opcional; por defecto usa el token del cache)
@@ -27,22 +31,39 @@ import http.server
 import socketserver
 import json
 import hashlib
+import hmac
 import os
 import sys
 import re
 import threading
 import webbrowser
-import subprocess
 from pathlib import Path
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse, parse_qs, quote, unquote
+from urllib.request import Request, urlopen
+
+from modules.control_center_v7 import (
+    backup_state as control_center_backup_state,
+    ensure_schema as ensure_control_center_v7_schema,
+    hydrate_analysis as hydrate_v7_analysis,
+    upsert_work_position as upsert_v7_work_position,
+)
 
 PORT = int(os.environ.get("PORT", 8000))
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data" / "master"
-UPDATE_TOKEN = os.environ.get("UPDATE_TOKEN", "stock-radar-2026")
+UPDATE_TOKEN = os.environ.get("UPDATE_TOKEN", "")
 IS_RENDER = os.environ.get("RENDER", "").lower() == "true" or "RENDER" in os.environ
+GITHUB_ACTIONS_TOKEN = os.environ.get("GITHUB_ACTIONS_TOKEN", "")
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "allndougls-dotcom/RENDER")
+GITHUB_WORKFLOW_FILE = os.environ.get("GITHUB_WORKFLOW_FILE", "actualizar-datos.yml")
+GITHUB_WORKFLOW_REF = os.environ.get("GITHUB_WORKFLOW_REF", "main")
+GITHUB_API_VERSION = "2022-11-28"
+_github_status_lock = threading.Lock()
+_github_dispatch_lock = threading.Lock()
+_github_status_cache = {"fetched_at": None, "data": None}
 
 TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "")
 TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
@@ -63,6 +84,155 @@ CONTROL_CENTER_DEFAULT_SETTINGS = {
     "earningsBlockDays": 7,
     "moveReanalysePct": 10,
 }
+
+
+def _github_actions_configured():
+    return bool(
+        GITHUB_ACTIONS_TOKEN
+        and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", GITHUB_REPOSITORY)
+        and GITHUB_WORKFLOW_FILE
+        and GITHUB_WORKFLOW_REF
+    )
+
+
+def _github_api_request(method, path, payload=None):
+    """Llama a GitHub sin exponer nunca el token al navegador."""
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+        "User-Agent": "SIDI-Control-Center",
+    }
+    if GITHUB_ACTIONS_TOKEN:
+        headers["Authorization"] = f"Bearer {GITHUB_ACTIONS_TOKEN}"
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    request = Request(
+        f"https://api.github.com{path}", data=body, headers=headers, method=method
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            raw = response.read()
+            data = json.loads(raw.decode("utf-8")) if raw else None
+            return response.status, data
+    except HTTPError as error:
+        raw = error.read().decode("utf-8", errors="replace")
+        try:
+            detail = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            detail = {"message": raw}
+        return error.code, detail
+    except URLError as error:
+        raise ConnectionError(f"github_unreachable: {error.reason}") from error
+
+
+def _github_workflow_path(suffix=""):
+    owner, repo = GITHUB_REPOSITORY.split("/", 1)
+    workflow = quote(GITHUB_WORKFLOW_FILE, safe="")
+    return f"/repos/{owner}/{repo}/actions/workflows/{workflow}{suffix}"
+
+
+def _public_workflow_run(run):
+    if not isinstance(run, dict):
+        return None
+    return {
+        "id": run.get("id"),
+        "runNumber": run.get("run_number"),
+        "event": run.get("event"),
+        "status": run.get("status"),
+        "conclusion": run.get("conclusion"),
+        "createdAt": run.get("created_at"),
+        "updatedAt": run.get("updated_at"),
+        "url": run.get("html_url"),
+        "headSha": str(run.get("head_sha") or "")[:12],
+    }
+
+
+def github_ingesta_status(force=False):
+    """Devuelve el último run del workflow y progreso basado en pasos reales."""
+    now = datetime.now(timezone.utc)
+    with _github_status_lock:
+        fetched_at = _github_status_cache.get("fetched_at")
+        if (not force and fetched_at and _github_status_cache.get("data")
+                and (now - fetched_at).total_seconds() < 8):
+            return _github_status_cache["data"]
+
+    if not _github_actions_configured():
+        return {"configured": False, "run": None}
+    query = f"?branch={quote(GITHUB_WORKFLOW_REF, safe='')}&per_page=5"
+    status, payload = _github_api_request("GET", _github_workflow_path("/runs") + query)
+    if status != 200:
+        message = payload.get("message") if isinstance(payload, dict) else "GitHub API error"
+        raise RuntimeError(f"github_runs_http_{status}: {message}")
+    runs = payload.get("workflow_runs", []) if isinstance(payload, dict) else []
+    run = runs[0] if runs else None
+    public_run = _public_workflow_run(run)
+    progress = 0
+    current_step = None
+    if public_run:
+        if public_run["status"] == "queued":
+            progress = 5
+            current_step = "En cola en GitHub Actions"
+        elif public_run["status"] == "in_progress":
+            progress = 15
+            jobs_status, jobs_payload = _github_api_request(
+                "GET",
+                f"/repos/{GITHUB_REPOSITORY}/actions/runs/{public_run['id']}/jobs?per_page=100",
+            )
+            if jobs_status == 200 and isinstance(jobs_payload, dict):
+                steps = [
+                    step for job in jobs_payload.get("jobs", [])
+                    for step in (job.get("steps") or [])
+                ]
+                relevant = [step for step in steps if not str(step.get("name") or "").startswith("Post ")]
+                complete = [step for step in relevant if step.get("status") == "completed"]
+                if relevant:
+                    progress = max(10, min(95, round(len(complete) / len(relevant) * 100)))
+                active = next((step for step in relevant if step.get("status") == "in_progress"), None)
+                current_step = active.get("name") if active else "Ejecutando workflow"
+        elif public_run["status"] == "completed":
+            progress = 100
+            current_step = "Completado" if public_run["conclusion"] == "success" else "Finalizado con error"
+    result = {
+        "configured": True,
+        "repository": GITHUB_REPOSITORY,
+        "workflow": GITHUB_WORKFLOW_FILE,
+        "ref": GITHUB_WORKFLOW_REF,
+        "run": public_run,
+        "progress": progress,
+        "currentStep": current_step,
+    }
+    with _github_status_lock:
+        _github_status_cache.update({"fetched_at": now, "data": result})
+    return result
+
+
+def github_dispatch_ingesta():
+    if not _github_actions_configured():
+        raise RuntimeError("github_actions_not_configured")
+    with _github_dispatch_lock:
+        current = github_ingesta_status(force=True)
+        run = current.get("run")
+        if run and run.get("status") in {"queued", "in_progress"}:
+            return {"dispatched": False, "alreadyRunning": True, **current}
+        status, payload = _github_api_request(
+            "POST", _github_workflow_path("/dispatches"), {"ref": GITHUB_WORKFLOW_REF}
+        )
+        if status != 204:
+            message = payload.get("message") if isinstance(payload, dict) else "GitHub API error"
+            raise RuntimeError(f"github_dispatch_http_{status}: {message}")
+        with _github_status_lock:
+            _github_status_cache.update({"fetched_at": None, "data": None})
+        return {
+            "configured": True,
+            "dispatched": True,
+            "alreadyRunning": False,
+            "requestedAt": datetime.now(timezone.utc).isoformat(),
+            "repository": GITHUB_REPOSITORY,
+            "workflow": GITHUB_WORKFLOW_FILE,
+            "ref": GITHUB_WORKFLOW_REF,
+            "run": None,
+        }
 
 
 def get_latest_csv():
@@ -405,6 +575,7 @@ def get_turso_conn():
                 PRIMARY KEY (ticker, signal_date, strategy_version)
             )
         """)
+        ensure_control_center_v7_schema(conn)
         conn.commit()
         _turso_conn = conn
         return conn
@@ -482,7 +653,7 @@ def registro_delete_all():
     conn.commit()
 
 
-CONTROL_CENTER_SCHEMA_VERSION = 6
+CONTROL_CENTER_SCHEMA_VERSION = 7
 OPERABLE_VERDICTS = {"VALIDADA", "VALIDADA CON CONDICIONES"}
 ACTIVE_OPERATION_STATUSES = {"PLANNED", "OPEN", "TP1"}
 NEW_YORK = ZoneInfo("America/New_York")
@@ -610,7 +781,7 @@ def _setup_key(strategy_version, ticker, signal_date):
 
 
 def _migrate_control_center_state(state):
-    """Migra a V6 sin borrar históricos ni operaciones LIVE."""
+    """Migra a V7 sin borrar históricos ni operaciones LIVE."""
     if not isinstance(state, dict):
         state = {}
     previous_schema = _int(state.get("schemaVersion"), 0) or 0
@@ -631,7 +802,11 @@ def _migrate_control_center_state(state):
         analysis["signalDate"] = str(analysis.get("signalDate") or analysis.get("date") or "")[:10]
         analysis["analysisDate"] = str(analysis.get("analysisDate") or analysis.get("date") or analysis["signalDate"])[:10]
         analysis["date"] = analysis["analysisDate"]
-        analysis["setupKey"] = _setup_key(analysis["strategyVersion"], analysis["ticker"], analysis["signalDate"])
+        if not (analysis.get("episodeId") and analysis.get("setupKey")):
+            analysis["setupKey"] = _setup_key(
+                analysis["strategyVersion"], analysis["ticker"],
+                analysis.get("episodeStartDate") or analysis["signalDate"],
+            )
         analysis["id"] = analysis.get("id") or "S-" + hashlib.sha256(analysis["setupKey"].encode()).hexdigest()[:16]
         analysis.setdefault("route", "REGISTRY")
         analysis.setdefault("routingReason", "LEGACY_MIGRATION" if analysis["strategyVersion"] == "LEGACY" else "VERDICT_ARCHIVE")
@@ -671,7 +846,7 @@ def _migrate_control_center_state(state):
 
 
 def _hydrate_shadow_results(state, conn):
-    """Añade el resultado Shadow a los setups ya analizados; no expone señales crudas."""
+    """Hidrata V7 por episodio y mantiene V1 únicamente como histórico."""
     try:
         columns = [
             "ticker", "signal_date", "strategy_version", "status", "entry_date",
@@ -688,16 +863,19 @@ def _hydrate_shadow_results(state, conn):
         }
         for analysis in state.get("analyses", []):
             analysis.pop("shadow", None)
-            shadow = shadow_by_key.get(analysis.get("setupKey"))
-            if shadow:
-                analysis["shadow"] = shadow
+            if analysis.get("episodeId"):
+                hydrate_v7_analysis(conn, analysis)
+            else:
+                shadow = shadow_by_key.get(analysis.get("setupKey"))
+                if shadow:
+                    analysis["shadow"] = shadow
     except Exception:
         pass
     return state
 
 
 def control_center_get():
-    """Devuelve el maestro V5: setups analizados + operaciones enlazadas."""
+    """Devuelve el maestro V7: episodios analizados + operaciones enlazadas."""
     conn = get_turso_conn()
     row = conn.execute(
         "SELECT schema_version, state_json, updated_at "
@@ -725,6 +903,7 @@ def control_center_save(state, schema_version=CONTROL_CENTER_SCHEMA_VERSION):
     state_to_save = json.loads(json.dumps(state, ensure_ascii=False))
     for analysis in state_to_save["analyses"]:
         analysis.pop("shadow", None)
+        analysis.pop("revisions", None)
     now = datetime.now().isoformat()
     raw = json.dumps(state_to_save, ensure_ascii=False, separators=(",", ":"))
     conn = get_turso_conn()
@@ -739,6 +918,66 @@ def control_center_save(state, schema_version=CONTROL_CENTER_SCHEMA_VERSION):
     """, ("main", CONTROL_CENTER_SCHEMA_VERSION, raw, now))
     conn.commit()
     return now
+
+
+def control_center_cleanup_v7():
+    """Limpia la vista activa sin destruir V1/LEGACY; todo queda respaldado."""
+    saved = control_center_get()
+    if not saved or not isinstance(saved.get("state"), dict):
+        return {"backup_id": None, "archived_analyses": 0, "archived_trades": 0}
+    conn = get_turso_conn()
+    state = saved["state"]
+    backup_id = control_center_backup_state(
+        conn, state, saved.get("schema_version", 0), "CONTROL_CENTER_V7_CLEANUP"
+    )
+    archived_analyses = list(state.get("archivedAnalyses") or [])
+    keep_analyses, moved_ids = [], set()
+    for analysis in state.get("analyses", []):
+        if str(analysis.get("strategyVersion") or "").upper() == "SIDI_INTRADAY_V2":
+            keep_analyses.append(analysis)
+        else:
+            archived = dict(analysis)
+            archived["archived"] = True
+            archived["archiveReason"] = "PRE_V7_HISTORY"
+            archived.pop("shadow", None)
+            archived.pop("revisions", None)
+            archived_analyses.append(archived)
+            moved_ids.add(analysis.get("id"))
+
+    archived_trades = list(state.get("archivedTrades") or [])
+    moved_trades = 0
+    keep_trades = []
+    for trade in state.get("trades", []):
+        if trade.get("setupId") in moved_ids or not trade.get("setupId"):
+            archived = dict(trade)
+            if archived.get("status") in ACTIVE_OPERATION_STATUSES:
+                archived["status"] = "CANCELLED"
+                archived["cancelReason"] = "PRE_V7_HISTORY"
+                archived["cancelledAt"] = datetime.now(timezone.utc).isoformat()
+            archived_trades.append(archived)
+            moved_trades += 1
+        else:
+            keep_trades.append(trade)
+
+    state["analyses"] = keep_analyses
+    state["trades"] = keep_trades
+    state["archivedAnalyses"] = archived_analyses
+    state["archivedTrades"] = archived_trades
+    state["schemaVersion"] = CONTROL_CENTER_SCHEMA_VERSION
+    state["cleanupBackupId"] = backup_id
+    conn.execute(
+        "UPDATE sidi_shadow_signals SET status='INVALID_MIGRATED_V7' "
+        "WHERE status='WAITING_ENTRY'"
+    )
+    conn.commit()
+    control_center_save(state, CONTROL_CENTER_SCHEMA_VERSION)
+    return {
+        "backup_id": backup_id,
+        "archived_analyses": len(moved_ids),
+        "archived_trades": moved_trades,
+        "active_analyses": len(keep_analyses),
+        "active_trades": len(keep_trades),
+    }
 
 
 def _first_value(*values):
@@ -773,7 +1012,8 @@ def _control_center_analysis(position, analysis_date):
     price_usd = _float(_first_value(position.get("price_current_usd"), position.get("price_usd"), technical.get("price")), 0.0)
     atr_usd = _float(_first_value(
         position.get("atr14_signal"), position.get("atr14_usd"),
-        trade.get("atr14_signal"), risk.get("atr14_signal"), technical.get("atr"),
+        position.get("atr14_signal_usd"), trade.get("atr14_signal"),
+        trade.get("atr14_signal_usd"), risk.get("atr14_signal"), technical.get("atr"),
     ), 0.0)
     atr_eur = _float(_first_value(
         position.get("atr14_signal_eur"), position.get("atr14_eur"),
@@ -826,6 +1066,7 @@ def _control_center_analysis(position, analysis_date):
         "decision": str(position.get("decision") or ""),
         "strategyVersion": strategy_version,
         "fullSetup": full_setup,
+        "atr14Usd": atr_usd,
         "atr14Eur": atr_eur,
         "entryRule": str(_first_value(
             position.get("entry_rule"), trade.get("entry_rule"), risk.get("entry_rule"),
@@ -845,6 +1086,9 @@ def _control_center_analysis(position, analysis_date):
         "blockers": _string_list(position.get("blockers")),
         "penalties": _string_list(position.get("penalties")),
         "catalysts": _string_list(position.get("catalysts")),
+        "strengths": _string_list(position.get("strengths") or position.get("catalysts")),
+        "weaknesses": _string_list(position.get("weaknesses") or position.get("penalties")),
+        "newsItems": position.get("news_items") if isinstance(position.get("news_items"), list) else [],
         "thesis": str(_first_value(position.get("thesis_short"), position.get("thesis")) or ""),
         "analysisSource": "CHATGPT_WORK",
     }
@@ -864,6 +1108,7 @@ def control_center_upsert_analysis_payload(payload):
     if not isinstance(positions, list):
         raise ValueError("positions debe ser una lista")
     analysis_date = str(sidi.get("analysis_date") or datetime.now().strftime("%Y-%m-%d"))[:10]
+    research_sources = payload.get("research_sources", {}) if isinstance(payload, dict) else {}
 
     saved = control_center_get()
     state = saved.get("state") if saved else None
@@ -889,14 +1134,38 @@ def control_center_upsert_analysis_payload(payload):
         if not analysis["fullSetup"]:
             ignored.append(analysis["ticker"])
             continue
-        analysis["setupKey"] = _setup_key(
+        actionable, timing_status, timing_reason = _analysis_route_timing(
+            analysis["strategyVersion"], analysis["signalDate"],
+            analysis["analysisDate"], now_dt,
+        )
+        daily_setup_key = _setup_key(
             analysis["strategyVersion"], analysis["ticker"], analysis["signalDate"]
         )
-        existing = next((item for item in state["analyses"]
-                         if item.get("setupKey") == analysis["setupKey"]), None)
+        v7_meta = None
+        if analysis["strategyVersion"].upper() == "SIDI_INTRADAY_V2":
+            sources = research_sources.get(analysis["ticker"], []) if isinstance(research_sources, dict) else []
+            v7_meta = upsert_v7_work_position(
+                get_turso_conn(), analysis, position, analysis_date, sources,
+                completed_at=now_dt, actionable=actionable,
+                timing_reason=timing_reason,
+            )
+            analysis["episodeId"] = v7_meta["episode_id"]
+            analysis["analysisKey"] = v7_meta["analysis_key"]
+            existing = next((item for item in state["analyses"]
+                             if item.get("episodeId") == analysis["episodeId"]), None)
+            analysis["setupKey"] = existing.get("setupKey") if existing else daily_setup_key
+            analysis["episodeStartDate"] = (
+                existing.get("episodeStartDate") or existing.get("signalDate")
+                if existing else analysis["signalDate"]
+            )
+        else:
+            analysis["setupKey"] = daily_setup_key
+            existing = next((item for item in state["analyses"]
+                             if item.get("setupKey") == analysis["setupKey"]), None)
         same_payload = bool(existing and existing.get("sourceFingerprint") == analysis["sourceFingerprint"])
         if same_payload:
             unchanged.append(analysis["ticker"])
+            continue
         elif existing:
             analysis["id"] = existing.get("id")
             analysis["createdAt"] = existing.get("createdAt") or now
@@ -930,10 +1199,6 @@ def control_center_upsert_analysis_payload(payload):
                        if trade_item.get("status") == "CLOSED"), None)
         cancelled = next((trade_item for trade_item in setup_operations
                           if trade_item.get("status") == "CANCELLED"), None)
-        actionable, timing_status, timing_reason = _analysis_route_timing(
-            current["strategyVersion"], current["signalDate"],
-            current["analysisDate"], now_dt,
-        )
         operable = current["verdict"] in OPERABLE_VERDICTS
         if closed:
             current["route"] = "REGISTRY"
@@ -1000,6 +1265,26 @@ def shadow_get_all():
     rows = conn.execute(
         f"SELECT {', '.join(columns)} FROM sidi_shadow_signals "
         "ORDER BY signal_date DESC, combined_score DESC, ticker"
+    ).fetchall()
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def shadow_v2_get_all():
+    conn = get_turso_conn()
+    ensure_control_center_v7_schema(conn)
+    columns = [
+        "episode_id", "ticker", "strategy_version", "status",
+        "original_verdict", "latest_verdict", "analysis_completed_at",
+        "entry_date", "entry_ts", "entry_price_usd", "entry_price_eur",
+        "atr14_usd", "stop_price_usd", "tp1_price_usd", "tp2_price_usd",
+        "shares", "risk_eur", "sessions_held", "tp1_hit", "tp1_date",
+        "exit_date", "exit_price_usd", "exit_reason", "pnl_pct_net",
+        "pnl_eur_net", "r_multiple_net", "mfe_pct", "mae_pct",
+        "last_mark_date", "invalid_reason", "created_at", "updated_at",
+    ]
+    rows = conn.execute(
+        f"SELECT {', '.join(columns)} FROM sidi_shadow_trades_v2 "
+        "ORDER BY created_at DESC, ticker"
     ).fetchall()
     return [dict(zip(columns, row)) for row in rows]
 
@@ -1291,7 +1576,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path == "/api/latest-csv": self.handle_latest_csv()
         elif path == "/api/registro": self.handle_registro_get()
         elif path == "/api/sidi/control-center": self.handle_control_center_get()
+        elif path == "/api/ingesta/status": self.handle_ingesta_status()
         elif path == "/api/sidi/shadow": self.handle_shadow_get()
+        elif path == "/api/sidi/shadow-v2": self.handle_shadow_v2_get()
         elif path == "/api/sidi/status": self.handle_sidi_status()
         elif path == "/api/sidi/market": self.handle_sidi_market()
         elif path == "/api/sidi/candidates": self.handle_sidi_candidates(query)
@@ -1312,6 +1599,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/trigger": self.handle_trigger()
         elif path == "/api/registro": self.handle_registro_post()
         elif path == "/api/sidi/control-center": self.handle_control_center_post()
+        elif path == "/api/sidi/control-center/cleanup-v7": self.handle_control_center_cleanup_v7()
         elif path in {"/api/sidi/analysis-cache", "/api/sidi/work-result"}: self.handle_analysis_cache_post()
         else: self.send_error(404)
 
@@ -1335,10 +1623,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "service": "STOCK-RADAR Cloud API", "status": "ok", "version": "1.4", "empresas": len(rows),
             "registro_backend": "turso" if turso_disponible() else "no configurado (usa localStorage)",
             "sidi_cache_backend": "turso" if turso_disponible() else "no configurado", "updated": datetime.now().isoformat(),
-            "endpoints": ["/status","/data","/market","/hot","/trigger","/mobile","/api/latest-csv",
+            "endpoints": ["/status","/data","/market","/hot","/trigger","/api/ingesta/status","/mobile","/api/latest-csv",
             "/api/registro (GET/POST/DELETE)","/api/sidi/status","/api/sidi/market","/api/sidi/candidates",
             "/api/sidi/candidates/{ticker}","/api/sidi/work-packet","/api/sidi/analysis-cache (GET/POST)",
-            "/api/sidi/shadow","/api/sidi/control-center (GET/POST)","/api/sidi/work-result (POST)",
+            "/api/sidi/shadow","/api/sidi/shadow-v2","/api/sidi/control-center (GET/POST)","/api/sidi/work-result (POST)",
+            "/api/sidi/control-center/cleanup-v7 (POST)",
             "/api/sidi/analysis-cache/{ticker}","/api/sidi/analysis-cache/save","/api/history/{ticker}?range=1d|5d|1mo|6mo|ytd|1y|5y|max"],
         })
 
@@ -1441,22 +1730,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         html = """<!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>SIDI Analysis Cache</title><style>body{font-family:system-ui;max-width:900px;margin:30px auto;padding:0 16px}textarea{width:100%;height:55vh;font-family:monospace}input{width:100%;padding:8px;margin:8px 0}button{padding:10px 18px}pre{white-space:pre-wrap}</style></head><body><h1>Guardar análisis SIDI</h1><p>Pega el JSON final completo de Work.</p><label>Token (solo si SIDI_CACHE_WRITE_TOKEN está configurado)</label><input id='token' type='password'><textarea id='payload' placeholder='{"sidi_excel_payload": {...}}'></textarea><br><button onclick='save()'>Guardar en Turso</button><pre id='result'></pre><script>async function save(){const payload=document.getElementById('payload').value;const token=document.getElementById('token').value;const headers={'Content-Type':'application/json'};if(token)headers['X-SIDI-Cache-Token']=token;try{const r=await fetch('/api/sidi/analysis-cache',{method:'POST',headers,body:payload});document.getElementById('result').textContent=JSON.stringify(await r.json(),null,2)}catch(e){document.getElementById('result').textContent=String(e)}}</script></body></html>"""
         body = html.encode("utf-8"); self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
 
-    def handle_trigger(self):
+    def _update_authorized(self):
         token = self.headers.get("X-Update-Token", "")
-        if token != UPDATE_TOKEN: self.send_json({"ok": False, "error": "token invalido"}, status=401); return
-        def run_ingesta():
-            inicio = datetime.now(); print(f"  🚀 Lanzando main_ingesta.py en background ({inicio.strftime('%H:%M:%S')})...", flush=True)
-            try:
-                resultado = subprocess.run([sys.executable, str(BASE_DIR / "main_ingesta.py")], cwd=str(BASE_DIR), timeout=3600); duracion = (datetime.now() - inicio).total_seconds()
-                if resultado.returncode == 0: print(f"  ✅ Ingesta completada correctamente en {duracion:.0f}s", flush=True)
-                else:
-                    probable = "posible OOM-kill / límite de memoria" if resultado.returncode < 0 else "ver traceback arriba"
-                    print(f"  ❌ Ingesta terminó con returncode={resultado.returncode} tras {duracion:.0f}s ({probable})", flush=True)
-            except subprocess.TimeoutExpired:
-                duracion = (datetime.now() - inicio).total_seconds(); print(f"  ❌ Ingesta cancelada por timeout tras {duracion:.0f}s (límite: 3600s)", flush=True)
-            except Exception as e:
-                duracion = (datetime.now() - inicio).total_seconds(); print(f"  ❌ Error en ingesta background tras {duracion:.0f}s: {e}", flush=True)
-        threading.Thread(target=run_ingesta, daemon=True).start(); self.send_json({"ok": True, "message": "Actualización iniciada en background"})
+        return bool(UPDATE_TOKEN) and hmac.compare_digest(token, UPDATE_TOKEN)
+
+    def handle_ingesta_status(self):
+        if not UPDATE_TOKEN:
+            self.send_json({"ok": False, "error": "update_token_not_configured"}, status=503)
+            return
+        if not self._update_authorized():
+            self.send_json({"ok": False, "error": "invalid_update_token"}, status=401)
+            return
+        try:
+            self.send_json({"ok": True, **github_ingesta_status()})
+        except Exception as error:
+            print(f"  ❌ Error consultando GitHub Actions: {error}", flush=True)
+            self.send_json({"ok": False, "error": str(error)}, status=502)
+
+    def handle_trigger(self):
+        if not UPDATE_TOKEN:
+            self.send_json({"ok": False, "error": "update_token_not_configured"}, status=503)
+            return
+        if not self._update_authorized():
+            self.send_json({"ok": False, "error": "invalid_update_token"}, status=401)
+            return
+        if not _github_actions_configured():
+            self.send_json({"ok": False, "error": "github_actions_not_configured"}, status=503)
+            return
+        try:
+            result = github_dispatch_ingesta()
+            code = 200 if result.get("alreadyRunning") else 202
+            self.send_json({"ok": True, **result}, status=code)
+        except Exception as error:
+            print(f"  ❌ Error lanzando GitHub Actions: {error}", flush=True)
+            self.send_json({"ok": False, "error": str(error)}, status=502)
 
     def handle_history(self, ticker, query):
         rango = (query.get("range", ["6mo"])[0] or "6mo").lower()
@@ -1532,6 +1839,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             print(f"  Error leyendo Shadow: {e}", flush=True)
             self.send_json({"ok": False, "error": str(e)}, status=500)
 
+    def handle_shadow_v2_get(self):
+        if not turso_disponible():
+            self.send_json({"ok": False, "error": "turso_not_configured"}, status=503)
+            return
+        try:
+            signals = shadow_v2_get_all()
+            self.send_json({
+                "ok": True,
+                "strategy_version": "SIDI_INTRADAY_V2",
+                "count": len(signals),
+                "signals": signals,
+            })
+        except Exception as e:
+            print(f"  Error leyendo Shadow V2: {e}", flush=True)
+            self.send_json({"ok": False, "error": str(e)}, status=500)
+
     def handle_control_center_post(self):
         if not turso_disponible():
             self.send_json({"ok": False, "error": "turso_not_configured"}, status=503)
@@ -1552,6 +1875,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(e)}, status=400)
         except Exception as e:
             print(f"  Error guardando Control Center: {e}", flush=True)
+            self.send_json({"ok": False, "error": str(e)}, status=500)
+
+    def handle_control_center_cleanup_v7(self):
+        if not turso_disponible():
+            self.send_json({"ok": False, "error": "turso_not_configured"}, status=503)
+            return
+        if not self._control_center_write_authorized():
+            self.send_json({"ok": False, "error": "invalid_control_center_token"}, status=401)
+            return
+        try:
+            result = control_center_cleanup_v7()
+            self.send_json({"ok": True, "schema_version": CONTROL_CENTER_SCHEMA_VERSION, **result})
+        except Exception as e:
+            print(f"  Error limpiando Control Center V7: {e}", flush=True)
             self.send_json({"ok": False, "error": str(e)}, status=500)
 
     def send_json(self, data, status=200):

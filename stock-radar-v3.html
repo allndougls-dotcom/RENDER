@@ -1426,7 +1426,7 @@ body::before {
   <div class="header-right">
     <span class="status-pill status-sample" id="dataStatus">● DATOS MUESTRA</span>
     <span id="dataStatusDetail" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-left:8px;white-space:nowrap"></span>
-  <button class="btn btn-secondary" id="triggerIngestaBtn" onclick="triggerIngesta()" title="Dispara main_ingesta.py en el servidor Render">⟳ Actualizar datos</button>
+  <button class="btn btn-secondary" id="triggerIngestaBtn" onclick="triggerIngesta()" title="Lanza el workflow de ingesta en GitHub Actions">⟳ Actualizar datos</button>
   <button class="btn btn-secondary" id="loadLatestBtn" onclick="cargarUltimoCSV()" title="Descarga el último CSV generado por el servidor">📥 Cargar datos</button>
   <button class="btn btn-secondary" onclick="document.getElementById('csvInput').click()">↑ Cargar CSV</button>
     <input type="file" id="csvInput" class="drop-input" accept=".csv" onchange="loadCSV(this)">
@@ -1556,7 +1556,7 @@ body::before {
     <div class="filter-group" style="display:flex;align-items:center;gap:6px">
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
         <input type="checkbox" id="fFullOnly" onchange="updateFilters()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer">
-        <span style="color:var(--accent);font-weight:600" title="SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12 · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1 · Abnormal20≤-10">🎯 Solo FULL SETUP</span>
+        <span style="color:var(--accent);font-weight:600" title="SIDI_INTRADAY_V2: las FULL SETUP se registran como episodios con revisión diaria y cartera Shadow">🎯 Solo FULL SETUP</span>
       </label>
     </div>
     <div class="filter-group" style="display:flex;align-items:center;gap:6px">
@@ -1567,7 +1567,7 @@ body::before {
     </div>
     <button class="btn btn-primary" onclick="updateFilters()">Aplicar</button>
     <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
-    <button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" onclick="seleccionarTodasFullSetup()" title="SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12 · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1 · Abnormal20≤-10">🎯 Seleccionar todas las FULL SETUP</button>
+    <button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" onclick="seleccionarTodasFullSetup()" title="SIDI_INTRADAY_V2: las FULL SETUP se registran como episodios con revisión diaria y cartera Shadow">🎯 Seleccionar todas las FULL SETUP</button>
   </div>
 
   <div id="scannerPrepararBar" style="display:none;position:sticky;top:0;z-index:20;background:var(--accent);border-radius:8px;padding:10px 16px;margin-bottom:12px;align-items:center;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.3)">
@@ -1911,10 +1911,10 @@ body::before {
 
 <!-- REGISTRO AUTOMÁTICO DE SEÑALES -->
 <div class="section" id="sec-registro" style="display:none" aria-hidden="true">
-  <div class="section-title">Registro de Señales <small style="font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);font-weight:400;letter-spacing:1px">SIDI_SHADOW_V1 · automático</small> <span id="registroSyncStatus" style="display:none;font-family:'DM Mono',monospace;font-size:10px;margin-left:12px"></span></div>
+  <div class="section-title">Registro histórico <small style="font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);font-weight:400;letter-spacing:1px">SIDI_SHADOW_V1 · solo auditoría</small> <span id="registroSyncStatus" style="display:none;font-family:'DM Mono',monospace;font-size:10px;margin-left:12px"></span></div>
 
   <div class="panel" style="margin-bottom:16px;font-size:11px;color:var(--text2);line-height:1.7">
-    <strong style="color:var(--accent)">Shadow V1 es el registro operativo.</strong> Se actualiza durante la ingesta diaria y aplica Open T+1, TP 0,75×ATR14, SL −5 %, T7, riesgo 1,5 %, máximo 5 posiciones, salida real en gaps y SL-first. El registro anterior permanece disponible como <strong>Legacy</strong> para auditoría.
+    <strong style="color:var(--accent)">Histórico Shadow V1.</strong> Se conserva exclusivamente para auditoría. El registro operativo actual vive en Control Center V7 como episodios SIDI_INTRADAY_V2, con revisiones, cartera Shadow y operaciones LIVE separadas.
   </div>
 
   <div class="stats-bar" id="registroStatsBar" style="margin-bottom:16px"></div>
@@ -1974,7 +1974,7 @@ body::before {
 <div class="section" id="sec-controlcenter">
   <div class="cc-scope">
 <div class="app">
-<header><div><h1>SIDI Control Center <span class="small">V5</span></h1><p>Registro maestro de FULL SETUP analizadas · Operaciones LIVE enlazadas · Turso como fuente única.</p><p class="small" id="ccSyncStatus">Sincronización pendiente…</p></div><div class="actions"><button class="primary" onclick="openImport()">Importación de recuperación</button><label class="filebtn">Restaurar backup<input id="backupFile" type="file" accept=".json"></label><button onclick="exportBackup()">Backup JSON</button><button onclick="exportExcelBackup()">Backup Excel (CSV)</button></div></header>
+<header><div><h1>SIDI Control Center <span class="small">V7</span></h1><p>Registro maestro de FULL SETUP analizadas · Operaciones LIVE enlazadas · Turso como fuente única.</p><p class="small" id="ccSyncStatus">Sincronización pendiente…</p></div><div class="actions"><button class="primary" onclick="openImport()">Importación de recuperación</button><label class="filebtn">Restaurar backup<input id="backupFile" type="file" accept=".json"></label><button onclick="exportBackup()">Backup JSON</button><button onclick="exportExcelBackup()">Backup Excel (CSV)</button></div></header>
 <nav class="tabs" style="display:none"><button class="tab active" data-view="dashboard">Dashboard</button><button class="tab" data-view="registry">Registro</button><button class="tab" data-view="operations">Operaciones</button><button class="tab" data-view="stats">Estadísticas</button><button class="tab" data-view="calendar">Calendario</button><button class="tab" data-view="settings">Configuración</button></nav>
 
 <section class="view active" id="view-dashboard">
@@ -1985,16 +1985,16 @@ body::before {
 
 <section class="view" id="view-registry"><div class="panel"><div class="toolbar"><h2 style="margin:0;margin-right:auto">Registro maestro · FULL SETUP analizadas</h2><input id="registrySearch" placeholder="Buscar ticker, sector, tesis…"><select id="registryVerdict"><option value="">Todos los veredictos</option><option>VALIDADA</option><option>VALIDADA CON CONDICIONES</option><option>WATCHLIST</option><option>BLOQUEADA</option><option>INSUFICIENTE INFORMACIÓN</option></select><select id="registryResult"><option value="">Todos los resultados</option><option value="PENDING">Shadow pendiente</option><option value="WIN">Shadow ganadora</option><option value="LOSS">Shadow perdedora</option><option value="NO_SHADOW">Sin resultado Shadow</option></select></div><p class="small">Solo aparecen setups cuantitativas FULL después de recibir el análisis completo y el veredicto. Las operaciones activas se muestran exclusivamente en Operaciones y regresan aquí cuando se cierran.</p><div class="tablewrap"><table><thead><tr><th>Señal</th><th>Ticker</th><th>Veredicto Work</th><th>Score</th><th>Ruta / motivo</th><th>Shadow</th><th>Resultado Shadow</th><th>LIVE</th><th>Sector</th><th>Tesis</th><th></th></tr></thead><tbody id="registryBody"></tbody></table></div></div></section>
 
-<section class="view" id="view-operations"><div class="grid cards"><div class="card"><div class="label">Planificadas</div><div class="value" id="oPlanned">0</div></div><div class="card"><div class="label">Abiertas</div><div class="value good" id="oOpen">0</div></div><div class="card"><div class="label">Legacy tras TP1</div><div class="value cyan" id="oTp1">0</div></div><div class="card"><div class="label">Cerradas</div><div class="value" id="oClosed">0</div></div><div class="card"><div class="label">P&L no realizado</div><div class="value" id="oUnreal">—</div></div><div class="card"><div class="label">Riesgo vivo</div><div class="value" id="oRisk">—</div></div><div class="card"><div class="label">Exposición</div><div class="value" id="oExposure">—</div></div><div class="card"><div class="label">Win rate</div><div class="value" id="oWin">—</div></div></div><div class="panel" style="margin-top:12px"><h2>Gestión de operaciones LIVE</h2><div class="tablewrap"><table><thead><tr><th>Ticker</th><th>Estado</th><th>Versión</th><th>Entrada</th><th>Precio actual</th><th>SL</th><th>TP</th><th>T7</th><th>Acciones</th><th>P&L / R</th><th>Riesgo vivo</th><th>Gestión</th></tr></thead><tbody id="tradeBody"></tbody></table></div></div></section>
+<section class="view" id="view-operations"><div class="grid cards"><div class="card"><div class="label">Planificadas</div><div class="value" id="oPlanned">0</div></div><div class="card"><div class="label">Abiertas</div><div class="value good" id="oOpen">0</div></div><div class="card"><div class="label">Tras TP1</div><div class="value cyan" id="oTp1">0</div></div><div class="card"><div class="label">Cerradas</div><div class="value" id="oClosed">0</div></div><div class="card"><div class="label">P&L no realizado</div><div class="value" id="oUnreal">—</div></div><div class="card"><div class="label">Riesgo vivo</div><div class="value" id="oRisk">—</div></div><div class="card"><div class="label">Exposición</div><div class="value" id="oExposure">—</div></div><div class="card"><div class="label">Win rate</div><div class="value" id="oWin">—</div></div></div><div class="panel" style="margin-top:12px"><h2>Gestión de operaciones LIVE</h2><div class="tablewrap"><table><thead><tr><th>Ticker</th><th>Estado</th><th>Versión</th><th>Entrada</th><th>Precio actual</th><th>SL</th><th>TP</th><th>T7</th><th>Acciones</th><th>P&L / R</th><th>Riesgo vivo</th><th>Gestión</th></tr></thead><tbody id="tradeBody"></tbody></table></div></div></section>
 
 
 <section class="view" id="view-stats"><div class="grid cards"><div class="card"><div class="label">Shadow cerradas</div><div class="value" id="sTrades">0</div></div><div class="card"><div class="label">WR veredictos operables</div><div class="value" id="sWin">—</div></div><div class="card"><div class="label">R medio Shadow</div><div class="value" id="sAvgR">—</div></div><div class="card"><div class="label">Expectancy Shadow</div><div class="value" id="sExpect">—</div></div><div class="card"><div class="label">Profit factor Shadow</div><div class="value" id="sPF">—</div></div><div class="card"><div class="label">Ganancia media Shadow</div><div class="value good" id="sAvgWin">—</div></div><div class="card"><div class="label">Pérdida media Shadow</div><div class="value bad" id="sAvgLoss">—</div></div><div class="card"><div class="label">Max drawdown LIVE</div><div class="value" id="sMDD">—</div></div></div><div class="grid three" style="margin-top:12px"><div class="panel"><h2>Shadow por News Score</h2><div id="scoreStats"></div></div><div class="panel"><h2>Shadow por sector</h2><div id="sectorStats"></div></div><div class="panel"><h2>Shadow por motivo de caída</h2><div id="reasonStats"></div></div></div><div class="grid two" style="margin-top:12px"><div class="panel"><h2>Veredictos de ChatGPT Work</h2><p class="small">Las VALIDADA miden ganadoras; las BLOQUEADA miden pérdidas correctamente evitadas.</p><div id="verdictStats"></div></div><div class="panel"><h2>Calibración SIDI</h2><div id="calibration"></div></div></div></section>
 
 <section class="view" id="view-calendar"><div class="panel"><div class="toolbar"><button onclick="changeMonth(-1)">←</button><h2 id="calendarTitle" style="margin:0">Calendario</h2><button onclick="changeMonth(1)">→</button><button onclick="calendarToday()">Hoy</button></div><div id="calendarGrid" class="calendar"></div></div></section>
 
-<section class="view" id="view-settings"><div class="panel"><h2>Reglas LIVE</h2><div class="settings"><label>Capital base €<input id="setCapital" type="number"></label><label>Riesgo por operación %<input id="setRiskPct" type="number" step=".1" value="1.5" readonly></label><label>Máx. posiciones<input id="setMaxPositions" type="number" value="5" readonly></label><label>Riesgo máximo cartera %<input id="setPortfolioRisk" type="number" step=".1" value="7.5" readonly></label><label>Amarillo desde (días)<input id="setWarnDays" type="number"></label><label>Caducado desde (días)<input id="setExpireDays" type="number"></label><label>Bloquear si earnings ≤ días<input id="setEarningsDays" type="number"></label><label>Reanalizar si precio mueve %<input id="setMovePct" type="number"></label><label>Token Turso (solo esta sesión)<input id="setControlToken" type="password" autocomplete="off"></label></div><div class="toolbar" style="margin-top:12px"><button class="primary" onclick="saveSettings()">Guardar</button><button onclick="resetSettings()">Defaults</button></div><p class="small">SIDI_INTRADAY_V2: entrada real posterior al análisis · TP1 +1×ATR14 (50 %) · TP2 +1,5×ATR14 · SL −5 % · BE tras TP1 · T7 · riesgo 1,5 % · máximo 3 posiciones.</p></div><div class="panel" style="margin-top:12px"><h2>Datos</h2><p class="small">Turso conserva la base maestra. localStorage es una caché de trabajo. JSON permite restauración completa y el CSV es el backup legible en Excel.</p><div class="toolbar"><button onclick="syncControlCenter(true)">Sincronizar ahora</button><button onclick="exportBackup()">Backup JSON</button><button onclick="exportExcelBackup()">Backup Excel (CSV)</button><button class="danger" onclick="clearAll()">Vaciar base</button></div></div></section>
+<section class="view" id="view-settings"><div class="panel"><h2>Reglas LIVE</h2><div class="settings"><label>Capital base €<input id="setCapital" type="number"></label><label>Riesgo por operación %<input id="setRiskPct" type="number" step=".1" value="1.5" readonly></label><label>Máx. posiciones<input id="setMaxPositions" type="number" value="3" readonly></label><label>Riesgo máximo cartera %<input id="setPortfolioRisk" type="number" step=".1" value="4.5" readonly></label><label>Amarillo desde (días)<input id="setWarnDays" type="number"></label><label>Caducado desde (días)<input id="setExpireDays" type="number"></label><label>Bloquear si earnings ≤ días<input id="setEarningsDays" type="number"></label><label>Reanalizar si precio mueve %<input id="setMovePct" type="number"></label><label>Token Turso (solo esta sesión)<input id="setControlToken" type="password" autocomplete="off"></label></div><div class="toolbar" style="margin-top:12px"><button class="primary" onclick="saveSettings()">Guardar</button><button onclick="resetSettings()">Defaults</button></div><p class="small">SIDI_INTRADAY_V2: entrada real posterior al análisis · TP1 +1×ATR14 (50 %) · TP2 +1,5×ATR14 · SL −5 % · BE tras TP1 · T7 · riesgo 1,5 % · máximo 3 posiciones.</p></div><div class="panel" style="margin-top:12px"><h2>Datos</h2><p class="small">Turso conserva la base maestra. localStorage es una caché de trabajo. JSON permite restauración completa y el CSV es el backup legible en Excel.</p><div class="toolbar"><button onclick="syncControlCenter(true)">Sincronizar ahora</button><button onclick="exportBackup()">Backup JSON</button><button onclick="exportExcelBackup()">Backup Excel (CSV)</button><button class="danger" onclick="clearAll()">Vaciar base</button></div></div></section>
 
-<div class="footer">SIDI Control Center V6 · Un setup maestro por versión+ticker+fecha de señal · Excel/CSV solo backup.</div></div>
+<div class="footer">SIDI Control Center V7 · Un episodio por oportunidad, con revisiones diarias · Excel/CSV solo backup.</div></div>
 
 <div class="modal" id="importModal"><div class="modalbox"><div class="modalhead"><h2>Importar análisis SIDI</h2><button onclick="ccCloseModal('importModal')">Cerrar</button></div><p class="small">Vía de recuperación manual. Los análisis terminados por ChatGPT Work se registran automáticamente. También acepta CSV del CUADRO FINAL o JSON sidi_excel_payload.</p><textarea id="importText" placeholder="Pega CSV o JSON…"></textarea><div class="toolbar" style="justify-content:flex-end;margin-top:10px"><button class="primary" onclick="importSidi()">Importar</button></div></div></div>
 <dialog class="cc-scope cc-ticker-dialog" id="tickerModal"><div class="modalbox"><div class="modalhead"><h2 id="tickerTitle">Ticker</h2><button onclick="ccCloseModal('tickerModal')">Cerrar</button></div><div id="tickerDetail"></div></div></dialog>
@@ -2202,7 +2202,7 @@ function renderTable() {
     const isFull = d.fullSetup === true;
     const isHot = d.setupHot === true;
     const isWatch = !isHot && d.drawdown60 >= 12 && d.score >= 6.5;
-    const setupLabel = isFull ? '<span class="setup-badge setup-hot" title="SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12 · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1 · Abnormal20≤-10">FULL V1</span>' : isHot ? '<span class="setup-badge setup-watch">HOT TÉCNICO</span>' : isWatch ? '<span class="setup-badge setup-watch">WATCH</span>' : '<span class="setup-badge setup-none">—</span>';
+    const setupLabel = isFull ? '<span class="setup-badge setup-hot" title="SIDI_INTRADAY_V2: episodio único, revisiones diarias y seguimiento Shadow">FULL V2</span>' : isHot ? '<span class="setup-badge setup-watch">HOT TÉCNICO</span>' : isWatch ? '<span class="setup-badge setup-watch">WATCH</span>' : '<span class="setup-badge setup-none">—</span>';
     const wCount = d.warningCount || 0;
     const warnStr = Array.isArray(d.warnings) ? d.warnings.join('; ') : String(d.warnings ?? '');
     const warnTitle = (warnStr && warnStr !== 'OK') ? warnStr.replace(/"/g, '&quot;') : '';
@@ -2249,7 +2249,7 @@ function renderTable() {
 
 let scannerSeleccionadas = new Set();
 
-// ── Seleccionar de golpe TODAS las empresas FULL SETUP (SIDI_SHADOW_V1)
+// ── Seleccionar de golpe TODAS las empresas FULL SETUP (SIDI_INTRADAY_V2)
 // del universo completo, independientemente del filtro visual activo en
 // ese momento (score, drawdown, sector...). Usa directamente
 // allData/fullSetup, no depende
@@ -3150,7 +3150,8 @@ function copyFillPrompt() {
 //       price_current_eur, price_current_usd, dd60d_pct, rsi_14,
 //       news_score, verdict, confidence, data_quality, decision,
 //       earnings_date_next, fall_reason,
-//       blockers: [], penalties: [], catalysts: [],
+//       blockers: [], penalties: [], catalysts: [], strengths: [], weaknesses: [],
+//       news_items: [{ published_at, source, title, url, impact, summary }],
 //       thesis_short,
 //       strategy_version, entry_rule, atr14_signal_eur,
 //       trade_plan: { strategy_version, entry_rule, atr14_signal_eur,
@@ -3258,9 +3259,13 @@ Obtén una cotización actual al terminar el análisis y úsala únicamente como
 entry_reference. Control Center exigirá después el actual_fill real del bróker.
 Tu función es emitir el veredicto cualitativo, conservar el ATR14 de la señal
 y calcular el plan indicativo desde entry_reference.
+Independientemente del veredicto, Control Center abrirá una simulación Shadow
+con la primera vela de 5 minutos posterior al análisis. Por eso conserva
+siempre ATR14 tanto en USD como en EUR, incluso cuando trade_plan sea null.
 Conserva también "signal_date" exactamente como llega en el JSON de entrada:
-forma parte de la clave única del setup y no debe recalcularse ni sustituirse
-por la fecha del análisis.
+identifica la revisión diaria y no debe recalcularse ni sustituirse por la fecha
+del análisis. Control Center agrupará las revisiones consecutivas en un único
+episodio mientras la oportunidad siga activa.
 Control Center calculará automáticamente los niveles exactos y el tamaño al
 registrar la ejecución real. Si no existe ATR14 verificable en el JSON de
 entrada, no fabriques uno: usa null y deja constancia en "decision".
@@ -3299,19 +3304,38 @@ Devuelve ÚNICAMENTE un bloque JSON (sin texto antes ni después, sin markdown \
         "strategy_version": "SIDI_INTRADAY_V2",
         "full_setup": true,
         "entry_rule": "POST_ANALYSIS_ACTUAL_FILL",
+        "atr14_signal_usd": 0.0,
         "atr14_signal_eur": 0.0,
         "earnings_date_next": "YYYY-MM-DD o null",
         "fall_reason": "motivo principal de la caída (ej: Earnings miss, Guidance, Sector, Macro, Regulación, Valuation compression, Analyst downgrade, Commodity, Technical selloff)",
         "blockers": ["lista de bloqueadores si los hay, o array vacío"],
         "penalties": ["lista de penalizaciones si las hay, o array vacío"],
         "catalysts": ["lista de catalizadores de rebote, o array vacío"],
+        "strengths": ["puntos fuertes fundamentales, técnicos o de valoración"],
+        "weaknesses": ["puntos débiles fundamentales, técnicos o de valoración"],
+        "news_items": [
+          {
+            "published_at": "YYYY-MM-DD",
+            "source": "medio o fuente primaria",
+            "title": "titular",
+            "url": "https://...",
+            "impact": "POSITIVO | NEGATIVO | NEUTRO",
+            "summary": "resumen propio y relevancia para la tesis"
+          }
+        ],
         "thesis_short": "1-2 frases con la tesis SIDI para esta empresa",
+        "analysis_update": {
+          "mode": "FULL | DELTA | REUSE",
+          "material_change": true
+        },
         "trade_plan": {
           "strategy_version": "SIDI_INTRADAY_V2",
           "entry_rule": "POST_ANALYSIS_ACTUAL_FILL",
           "entry_reference_eur": 0.0,
           "entry_reference_usd": 0.0,
           "actual_fill_eur": null,
+          "actual_fill_usd": null,
+          "atr14_signal_usd": 0.0,
           "atr14_signal_eur": 0.0,
           "stop_loss_rule": "ACTUAL_FILL_X_0_95",
           "tp1_rule": "ACTUAL_FILL_PLUS_1_0_ATR14",
@@ -3320,6 +3344,11 @@ Devuelve ÚNICAMENTE un bloque JSON (sin texto antes ni después, sin markdown \
           "max_risk_eur": ${SIDI_PARAMS.riesgo_max_nominal_eur}
         }
       }
+    ]
+  },
+  "research_sources": {
+    "TICKER": [
+      {"title": "fuente consultada", "url": "https://...", "published_at": "YYYY-MM-DD"}
     ]
   }
 }
@@ -4359,13 +4388,12 @@ function getSyncedUniverse() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TRIGGER DE INGESTA REMOTA — dispara main_ingesta.py en el servidor
-// Render vía POST /trigger. La ingesta corre en background en el
-// servidor (tarda ~20 min) — este botón solo la inicia y avisa,
-// no espera a que termine. Para ver los datos nuevos, hay que
-// recargar/volver a cargar el CSV pasado ese tiempo.
+// TRIGGER DE INGESTA REMOTA — Render conserva las credenciales y envía un
+// workflow_dispatch a GitHub Actions. El navegador solo conoce la clave de
+// usuario durante esta sesión y consulta estados reales del workflow.
 // ══════════════════════════════════════════════════════════════
-const INGESTA_TOKEN = 'stock-radar-2026'; // debe coincidir con UPDATE_TOKEN en Render
+const INGESTA_TOKEN_KEY = 'sidiUpdateToken';
+let ingestaMonitorInterval = null;
 // Publishable key de logo.dev — segura para exponer en frontend (no da acceso
 // a nada sensible, solo permite consultar logos). Ver https://logo.dev/dashboard
 const LOGO_DEV_TOKEN = 'pk_lnSBETYtRdWnQy1tszW-aw';
@@ -4784,107 +4812,155 @@ function ocultarProgreso(retrasoMs = 1200) {
 
 async function triggerIngesta() {
   const confirmado = confirm(
-    'Esto va a lanzar main_ingesta.py en el servidor de Render (tarda ~20 minutos).\n\n' +
-    'Puedes cerrar esta pantalla — el proceso corre en segundo plano y esta barra ' +
-    'seguirá tu progreso estimado. Cuando termine, pulsa "📥 Cargar datos".\n\n' +
+    'Esto va a lanzar el workflow de ingesta en GitHub Actions.\n\n' +
+    'La barra mostrará el estado real de la ejecución. Cuando GitHub publique el CSV, ' +
+    'Render se actualizará automáticamente.\n\n' +
     '¿Continuar?'
   );
   if (!confirmado) return;
 
+  let token = sessionStorage.getItem(INGESTA_TOKEN_KEY) || '';
+  if (!token) {
+    token = (prompt('Introduce la clave de actualización configurada en Render:') || '').trim();
+    if (!token) return;
+    sessionStorage.setItem(INGESTA_TOKEN_KEY, token);
+  }
+
   const btn = document.getElementById('triggerIngestaBtn');
   const originalText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = '⏳ Iniciando...';
+  btn.textContent = '⏳ Solicitando...';
 
   try {
     const res = await fetch('/trigger', {
       method: 'POST',
       headers: {
-        'X-Update-Token': INGESTA_TOKEN,
+        'X-Update-Token': token,
         'Content-Type': 'application/json',
       },
       body: '{}',
     });
+    const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
-      alert('Token de actualización incorrecto. Revisa INGESTA_TOKEN en el HTML vs UPDATE_TOKEN en las variables de entorno de Render.');
+      sessionStorage.removeItem(INGESTA_TOKEN_KEY);
+      alert('Clave de actualización incorrecta. Se ha eliminado de esta sesión para que puedas introducirla de nuevo.');
+      btn.textContent = originalText;
+      btn.disabled = false;
+      return;
+    }
+
+    if (res.status === 503) {
+      const detail = data.error === 'update_token_not_configured'
+        ? 'Falta configurar UPDATE_TOKEN en Render.'
+        : 'Falta configurar GITHUB_ACTIONS_TOKEN en Render.';
+      alert(`GitHub Actions todavía no está configurado en el servidor. ${detail}`);
       btn.textContent = originalText;
       btn.disabled = false;
       return;
     }
 
     if (!res.ok) {
-      alert(`Error al iniciar la actualización (HTTP ${res.status}). Comprueba que el servidor esté activo.`);
+      alert(`GitHub no aceptó la actualización (HTTP ${res.status}): ${data.error || 'error desconocido'}`);
       btn.textContent = originalText;
       btn.disabled = false;
       return;
     }
 
-    await res.json();
-    btn.textContent = '🔄 En curso...';
+    btn.textContent = data.alreadyRunning ? '🔄 Ya en curso...' : '🔄 Lanzada...';
     document.getElementById('dataStatusDetail').style.display = 'inline';
     document.getElementById('dataStatusDetail').innerHTML =
-      '<span style="color:var(--amber)">Actualización en curso — sigue el progreso en la barra de arriba</span>';
-
-    // Progreso ESTIMADO por tiempo transcurrido (el navegador no puede
-    // conocer el % real de un proceso corriendo en el servidor). Se
-    // calibra a ~20 min, pero se detiene en 95% si tarda más, y se
-    // completa de golpe en cuanto /status confirma un CSV más reciente.
-    const DURACION_ESTIMADA_MS = 20 * 60 * 1000;
-    const inicio = Date.now();
-    mostrarProgreso('Actualizando datos en el servidor (~20 min)...');
-
-    const csvInicial = await obtenerNombreUltimoCsv();
-    let avisoTopeMostrado = false;
-
-    const intervalo = setInterval(async () => {
-      const transcurrido = Date.now() - inicio;
-      const pctEstimado = Math.min(95, (transcurrido / DURACION_ESTIMADA_MS) * 100);
-
-      // Al llegar al tope del 95% (proceso tardando más de lo estimado),
-      // se cambia el mensaje para dejar claro que NO está colgado —
-      // sigue comprobando cada 15s, solo que ya no sube el % porque no
-      // hay forma de saber cuánto falta realmente.
-      if (pctEstimado >= 95 && !avisoTopeMostrado) {
-        avisoTopeMostrado = true;
-        actualizarProgreso(95, '⏳ Terminando (puede tardar más de 20 min según el tamaño del universo)... comprobando cada 15s');
-      } else if (!avisoTopeMostrado) {
-        actualizarProgreso(pctEstimado);
-      }
-
-      const csvActual = await obtenerNombreUltimoCsv();
-      if (csvActual && csvActual !== csvInicial) {
-        clearInterval(intervalo);
-        actualizarProgreso(100, '✅ Datos actualizados — pulsa "Cargar datos"');
-        btn.textContent = originalText;
-        btn.disabled = false;
-        ocultarProgreso(4000);
-      } else if (transcurrido > DURACION_ESTIMADA_MS * 2) {
-        // Límite de seguridad: tras 40 min sin detectar CSV nuevo, se deja
-        // de comprobar automáticamente (evita un intervalo corriendo para
-        // siempre si algo falló en el servidor), pero se explica bien.
-        clearInterval(intervalo);
-        actualizarProgreso(95, '⚠ Han pasado más de 40 min sin detectar datos nuevos — revisa los logs de Render o pulsa "Cargar datos" para comprobar manualmente');
-        btn.textContent = originalText;
-        btn.disabled = false;
-      }
-    }, 15000); // comprobar cada 15s
+      `<span style="color:var(--amber)">${data.alreadyRunning ? 'Ya había una ingesta activa' : 'Solicitud aceptada por GitHub'} — siguiendo la ejecución real</span>`;
+    mostrarProgreso('GitHub Actions: esperando ejecución...');
+    await monitorizarIngestaGitHub({
+      btn,
+      originalText,
+      requestedAt: data.requestedAt || data.run?.createdAt || new Date().toISOString(),
+      runId: data.run?.id || null,
+      token,
+    });
 
   } catch (e) {
-    alert('No se pudo contactar con el servidor. ¿Está el servicio de Render despierto? (el plan gratuito se duerme tras 15 min sin tráfico — prueba a recargar la página primero para despertarlo, y reintenta en unos segundos).');
+    alert(`No se pudo solicitar GitHub Actions: ${e.message || e}`);
     btn.textContent = originalText;
     btn.disabled = false;
   }
 }
 
-async function obtenerNombreUltimoCsv() {
-  try {
-    const res = await fetch('/api/latest-csv', { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return null;
-    const info = await res.json();
-    return info.filename || null;
-  } catch (e) {
-    return null;
+async function obtenerEstadoIngestaGitHub(token) {
+  const res = await fetch('/api/ingesta/status', {
+    headers: {'X-Update-Token': token},
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+async function monitorizarIngestaGitHub({ btn, originalText, requestedAt, runId, token }) {
+  if (ingestaMonitorInterval) clearInterval(ingestaMonitorInterval);
+  const inicio = Date.now();
+  let fallos = 0;
+  const revisar = async () => {
+    try {
+      const data = await obtenerEstadoIngestaGitHub(token);
+      fallos = 0;
+      const run = data.run;
+      const esRunSolicitado = run && (
+        runId ? String(run.id) === String(runId)
+          : Date.parse(run.createdAt || 0) >= Date.parse(requestedAt) - 10000
+      );
+      if (!esRunSolicitado) {
+        actualizarProgreso(5, 'GitHub Actions: solicitud aceptada, esperando que aparezca en la cola...');
+        return;
+      }
+      runId = run.id;
+      if (run.status === 'queued') {
+        actualizarProgreso(data.progress || 5, `GitHub Actions #${run.runNumber}: en cola`);
+        return;
+      }
+      if (run.status === 'in_progress') {
+        btn.textContent = '🔄 En GitHub...';
+        actualizarProgreso(data.progress || 15, `GitHub Actions #${run.runNumber}: ${data.currentStep || 'ejecutando'}`);
+        return;
+      }
+      if (run.status === 'completed') {
+        clearInterval(ingestaMonitorInterval);
+        ingestaMonitorInterval = null;
+        btn.textContent = originalText;
+        btn.disabled = false;
+        if (run.conclusion === 'success') {
+          actualizarProgreso(100, `✅ GitHub Actions #${run.runNumber} completado; Render publicará los datos nuevos`);
+          document.getElementById('dataStatusDetail').innerHTML =
+            '<span style="color:var(--green)">Ingesta completada y CSV publicado en GitHub. Esperando el despliegue de Render.</span>';
+          ocultarProgreso(8000);
+        } else {
+          actualizarProgreso(100, `❌ GitHub Actions #${run.runNumber}: ${run.conclusion || 'fallido'}`);
+          document.getElementById('dataStatusDetail').innerHTML =
+            `<span style="color:var(--red)">La ingesta terminó con estado ${String(run.conclusion || 'fallido')}.</span>`;
+        }
+      }
+    } catch (error) {
+      fallos++;
+      if (fallos >= 5) {
+        clearInterval(ingestaMonitorInterval);
+        ingestaMonitorInterval = null;
+        btn.textContent = originalText;
+        btn.disabled = false;
+        actualizarProgreso(10, `⚠ No se pudo consultar GitHub Actions: ${error.message || error}`);
+      }
+    }
+    if (Date.now() - inicio > 3 * 60 * 60 * 1000) {
+      clearInterval(ingestaMonitorInterval);
+      ingestaMonitorInterval = null;
+      btn.textContent = originalText;
+      btn.disabled = false;
+      actualizarProgreso(95, '⚠ El workflow supera las 3 horas; revisa GitHub Actions');
+    }
+  };
+  await revisar();
+  if (!ingestaMonitorInterval && btn.disabled) {
+    ingestaMonitorInterval = setInterval(revisar, 10000);
   }
 }
 
@@ -6384,8 +6460,8 @@ function renderBtTrades(trades) {
 (function() {
 'use strict';
 
-const DBKEY='sidi_control_center_v6',LEGACY_KEYS=['sidi_control_center_v5','sidi_control_center_v4','sidi_control_center_v3'],OLDKEY='sidi_log_analyzer_v2';
-const CC_SCHEMA_VERSION=6,CC_API='/api/sidi/control-center';
+const DBKEY='sidi_control_center_v7',LEGACY_KEYS=['sidi_control_center_v6','sidi_control_center_v5','sidi_control_center_v4','sidi_control_center_v3'],OLDKEY='sidi_log_analyzer_v2';
+const CC_SCHEMA_VERSION=7,CC_API='/api/sidi/control-center';
 const DEF={capital:10000,riskPct:1.5,riskMax:150,maxPositions:3,portfolioRiskPct:4.5,warnDays:4,expireDays:8,earningsBlockDays:7,moveReanalysePct:10};
 let ccSyncTimer=null,ccSyncInFlight=false,ccServerAvailable=null,ccLoadedLegacy=false;
 let state={settings:{...DEF},analyses:[],trades:[]},calDate=new Date();
@@ -6394,7 +6470,7 @@ const seed=[
 {id:'A-HUM-20260808',date:'2026-08-08',ticker:'HUM',company:'Humana',sector:'Health Care',subsector:'Managed Care / Medicare Advantage',priceUsd:385,priceEur:332.47,dd60:10.23,rsi:32.59,newsScore:5.9,verdict:'WATCHLIST',confidence:'Media-Alta',dataQuality:'Alta',decision:'NO OPERAR',entry:0,sl:0,tp1:0,tp2:0,shares:0,risk:0,notional:0,earningsDate:'2026-11-06',fallReason:'EPS / Stars / márgenes',blockers:['Visibilidad insuficiente Stars 2027'],penalties:['EPS 2026 deprimido','MBR elevado','Riesgo CMS/Stars'],catalysts:['Q2 beat','MBR en línea','MA membership','Rates 2027'],thesis:'Turnaround plausible, pero el precio ya descuenta una recuperación material de márgenes y Stars.'},
 {id:'A-GEV-20260808',date:'2026-08-08',ticker:'GEV',company:'GE Vernova',sector:'Industrials',subsector:'Power Generation & Electrification Equipment',priceUsd:1000.3,priceEur:863.82,dd60:16.36,rsi:43.29,newsScore:7.5,verdict:'VALIDADA CON CONDICIONES',confidence:'Alta',dataQuality:'Alta',decision:'ESPERAR ENTRADA',entry:833.33,entryAlt:893.78,sl:785.84,tp1:949.91,tp2:1027.63,shares:2,risk:94.99,notional:1666.67,earningsDate:'2026-10-28',fallReason:'EPS miss / descompresión de expectativas',blockers:[],penalties:['EPS miss','Wind débil','Valoración exigente','Tariffs'],catalysts:['Guidance ventas/FCF elevado','Backlog $176B','Power fuerte','Electrification fuerte'],thesis:'La caída parece superior al deterioro real: guidance, backlog y FCF mejoran; Wind y expectativas altas justifican condiciones.'}
 ];
-const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),safeUrl=s=>/^https?:\/\//i.test(String(s||''))?esc(s):'#';
 const num=v=>{if(typeof v==='number')return Number.isFinite(v)?v:0;let s=String(v??'').trim().replace(/\s/g,'');if(!s)return 0;if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');else if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');return Number(s)||0};
 const fmt=(v,d=2)=>num(v).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}),eur=(v,d=0)=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',minimumFractionDigits:d,maximumFractionDigits:d}).format(num(v)),pct=(v,d=1)=>fmt(v,d)+'%',today=()=>new Date().toISOString().slice(0,10),uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),trad=v=>v==='VALIDADA'||v==='VALIDADA CON CONDICIONES';
 const arr=v=>Array.isArray(v)?v:(v?String(v).split('|').map(x=>x.trim()).filter(Boolean):[]);const boolVal=v=>v===true||['true','1','yes','si','sí'].includes(String(v??'').trim().toLowerCase());function dateDiff(a,b=today()){if(!a)return 999;return Math.floor((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000)}function daysUntil(d){if(!d)return null;return Math.ceil((new Date(d+'T12:00:00')-new Date(today()+'T12:00:00'))/86400000)}
@@ -6407,7 +6483,7 @@ function ccStatus(text,cls=''){let el=$('ccSyncStatus');if(el){el.textContent=te
 function persistLocal(){state.schemaVersion=CC_SCHEMA_VERSION;state.updatedAt=new Date().toISOString();localStorage.setItem(DBKEY,JSON.stringify(state))}
 function save(){persistLocal();clearTimeout(ccSyncTimer);ccSyncTimer=setTimeout(pushControlCenterSafe,500)}
 function setupKey(a){return`${String(a.strategyVersion||'LEGACY').toUpperCase()}|${String(a.ticker||'').toUpperCase()}|${String(a.signalDate||a.date||'').slice(0,10)}`}
-function migrateState(raw){let s=raw&&typeof raw==='object'?raw:{};s.settings={...DEF,...(s.settings||{}),riskPct:1.5,maxPositions:3,portfolioRiskPct:4.5};s.analyses=Array.isArray(s.analyses)?s.analyses:[];s.trades=Array.isArray(s.trades)?s.trades:[];let byId=new Map(),byKey=new Map();s.analyses.forEach(a=>{a.ticker=String(a.ticker||'').toUpperCase();a.strategyVersion=a.strategyVersion||'LEGACY';a.signalDate=String(a.signalDate||a.date||'').slice(0,10);a.analysisDate=String(a.analysisDate||a.date||a.signalDate).slice(0,10);a.date=a.analysisDate;a.setupKey=setupKey(a);a.id=a.id||`S-${a.ticker}-${a.signalDate.replaceAll('-','')}`;a.route=a.route||'REGISTRY';a.routingReason=a.routingReason||(a.strategyVersion==='LEGACY'?'LEGACY_MIGRATION':'VERDICT_ARCHIVE');byId.set(a.id,a);byKey.set(a.setupKey,a)});s.trades.forEach(t=>{let a=byId.get(t.setupId||t.analysisId)||byKey.get(`${String(t.strategyVersion||'LEGACY').toUpperCase()}|${String(t.ticker||'').toUpperCase()}|${String(t.signalDate||t.entryDate||'').slice(0,10)}`);if(a){t.setupId=a.id;delete t.analysisId;['ticker','analysisNewsScore','analysisVerdict','analysisSource','strategyVersion','sector','fallReason','signalDate','referencePrice'].forEach(k=>delete t[k]);if(['PLANNED','OPEN','TP1'].includes(t.status)){a.route='OPERATIONS';a.routingReason='ACTIVE_OPERATION'}else if(t.status==='CLOSED'){a.route='REGISTRY';a.routingReason='LIVE_CLOSED'}}});s.schemaVersion=CC_SCHEMA_VERSION;return s}
+function migrateState(raw){let s=raw&&typeof raw==='object'?raw:{};s.settings={...DEF,...(s.settings||{}),riskPct:1.5,maxPositions:3,portfolioRiskPct:4.5};s.analyses=Array.isArray(s.analyses)?s.analyses:[];s.trades=Array.isArray(s.trades)?s.trades:[];let byId=new Map(),byKey=new Map();s.analyses.forEach(a=>{a.ticker=String(a.ticker||'').toUpperCase();a.strategyVersion=a.strategyVersion||'LEGACY';a.signalDate=String(a.signalDate||a.date||'').slice(0,10);a.analysisDate=String(a.analysisDate||a.date||a.signalDate).slice(0,10);a.date=a.analysisDate;if(!(a.episodeId&&a.setupKey))a.setupKey=setupKey(a);a.id=a.id||`S-${a.ticker}-${a.signalDate.replaceAll('-','')}`;a.route=a.route||'REGISTRY';a.routingReason=a.routingReason||(a.strategyVersion==='LEGACY'?'LEGACY_MIGRATION':'VERDICT_ARCHIVE');byId.set(a.id,a);byKey.set(a.setupKey,a)});s.trades.forEach(t=>{let a=byId.get(t.setupId||t.analysisId)||byKey.get(`${String(t.strategyVersion||'LEGACY').toUpperCase()}|${String(t.ticker||'').toUpperCase()}|${String(t.signalDate||t.entryDate||'').slice(0,10)}`);if(a){t.setupId=a.id;delete t.analysisId;['ticker','analysisNewsScore','analysisVerdict','analysisSource','strategyVersion','sector','fallReason','signalDate','referencePrice'].forEach(k=>delete t[k]);if(['PLANNED','OPEN','TP1'].includes(t.status)){a.route='OPERATIONS';a.routingReason='ACTIVE_OPERATION'}else if(t.status==='CLOSED'){a.route='REGISTRY';a.routingReason='LIVE_CLOSED'}}});s.schemaVersion=CC_SCHEMA_VERSION;return s}
 function load(){try{let r=localStorage.getItem(DBKEY),migrated=false;if(!r){for(const key of LEGACY_KEYS){r=localStorage.getItem(key);if(r){migrated=true;ccLoadedLegacy=true;break}}}if(r){state=migrateState(JSON.parse(r))}else{state=migrateState({settings:{...DEF},analyses:seed,trades:[]});let old=localStorage.getItem(OLDKEY);if(old){try{JSON.parse(old).forEach(x=>upsert(norm({Fecha:x.fecha,Ticker:x.ticker,Veredicto:x.veredicto,'News Score':x.score,Decisión:x.decision,'Entrada EUR':x.entrada,'SL EUR':x.sl,'TP1 EUR':x.tp1,'TP2 EUR':x.tp2,Acciones:x.acciones,'Riesgo EUR':x.riesgo,'Notional EUR':x.notional,'Comentario LOG':x.comentario}),false))}catch(e){}}migrated=true;ccLoadedLegacy=true}if(migrated)persistLocal()}catch(e){state=migrateState({settings:{...DEF},analyses:[],trades:[]});persistLocal()}}
 async function syncControlCenter(manual=false){if(ccSyncInFlight)return;ccSyncInFlight=true;ccStatus('Sincronizando con Turso…','warn');try{const get=await fetch(CC_API,{signal:AbortSignal.timeout(10000)});if(get.status===503){ccServerAvailable=false;ccStatus('Turso no configurado · trabajando con caché local','warn');return}if(!get.ok)throw new Error(`GET ${get.status}`);const remote=await get.json();ccServerAvailable=true;if(remote.exists&&remote.state){let localTs=state.updatedAt||'',remoteTs=remote.state.updatedAt||remote.updated_at||'';if(!ccLoadedLegacy&&localTs&&localTs>remoteTs){if(await pushControlCenter())ccStatus('Cambios locales pendientes enviados a Turso','good');return}state=migrateState(remote.state);ccLoadedLegacy=false;persistLocal();renderAll();ccStatus(`Turso sincronizado · ${String(remote.updated_at||'').slice(0,19).replace('T',' ')}`,'good');return}if(await pushControlCenter()){ccLoadedLegacy=false;ccStatus('Turso inicializado con la base local','good')}}catch(e){ccStatus('Sin conexión con Turso · cambios guardados en caché local','warn');if(manual)alert('No se pudo sincronizar con Turso: '+e.message)}finally{ccSyncInFlight=false}}
 async function pushControlCenter(){const headers={'Content-Type':'application/json'};const token=sessionStorage.getItem('sidiControlToken');if(token)headers['X-SIDI-Control-Token']=token;const res=await fetch(CC_API,{method:'POST',headers,body:JSON.stringify({schema_version:CC_SCHEMA_VERSION,state}),signal:AbortSignal.timeout(10000)});if(res.status===401){ccServerAvailable=false;ccStatus('Turso requiere token de escritura','bad');return false}if(!res.ok)throw new Error(`POST ${res.status}`);ccServerAvailable=true;const data=await res.json();ccStatus(`Guardado en Turso · ${String(data.updated_at||'').slice(0,19).replace('T',' ')}`,'good');return true}
@@ -6416,22 +6492,23 @@ function latest(){let m={};[...state.analyses].sort((a,b)=>a.analysisDate.locale
 function realized(t){let p=0;if(t.tp1Shares&&t.tp1Price)p+=(num(t.tp1Price)-num(t.entryPrice))*num(t.tp1Shares);if(t.status==='CLOSED'&&t.exitShares)p+=(num(t.exitPrice)-num(t.entryPrice))*num(t.exitShares);return p-num(t.commission)-num(t.exitCommission)}function unreal(t){if(!['OPEN','TP1'].includes(t.status))return 0;return (num(t.currentPrice||t.entryPrice)-num(t.entryPrice))*(num(t.shares)-num(t.tp1Shares))}function initRisk(t){return Math.max(0,(num(t.entryPrice)-num(t.initialSl||t.sl))*num(t.shares))}function liveRisk(t){if(!['OPEN','TP1'].includes(t.status))return 0;return Math.max(0,(num(t.entryPrice)-num(t.sl))*(num(t.shares)-num(t.tp1Shares)))}function rMult(t){let r=initRisk(t);return r?realized(t)/r:0}function capital(){return num(state.settings.capital)+state.trades.filter(t=>t.status==='CLOSED').reduce((s,t)=>s+realized(t),0)}
 function freshness(a){let d=dateDiff(a.date),s=state.settings;if(d>=s.expireDays)return{code:'EXPIRED',label:`Caducado · ${d}d`,cls:'bad'};if(d>=s.warnDays)return{code:'WARN',label:`Revisar · ${d}d`,cls:'warn'};return{code:'FRESH',label:`Actual · ${d}d`,cls:'good'}}
 function action(a){let f=freshness(a),ed=daysUntil(a.earningsDate),active=state.trades.some(t=>t.setupId===a.id&&['PLANNED','OPEN','TP1'].includes(t.status));if(active)return{label:'EN OPERACIONES',cls:'cyan',reason:'Plan u operación activa.'};if(a.routingReason==='ANALYSIS_LATE'||a.routingReason==='ANALYSIS_NOT_SIGNAL_SESSION'||a.routingReason==='ANALYSIS_AFTER_ENTRY_WINDOW')return{label:'ARCHIVADA',cls:'warn',reason:'La ventana operativa de la señal ya terminó.'};if(a.routingReason==='MISSING_ATR')return{label:'ARCHIVADA',cls:'bad',reason:'Falta ATR14 de la señal.'};if(f.code==='EXPIRED')return{label:'REGISTRO',cls:'warn',reason:'Análisis histórico.'};if(ed!==null&&ed>=0&&ed<=state.settings.earningsBlockDays)return{label:'REGISTRO',cls:'bad',reason:`Earnings en ${ed} días.`};if(a.verdict==='BLOQUEADA')return{label:'REGISTRO',cls:'bad',reason:'Pérdida potencial evitada.'};if(a.verdict==='WATCHLIST'||a.verdict==='INSUFICIENTE INFORMACIÓN')return{label:'REGISTRO',cls:'cyan',reason:a.decision||'No operable.'};return{label:a.route==='OPERATIONS'?'OPERACIONES':'REGISTRO',cls:a.route==='OPERATIONS'?'good':'cyan',reason:a.routingReason||'Clasificada.'}}
-function audits(){let o=[],s=state.settings,ot=openTrades(),cap=capital(),risk=ot.reduce((x,t)=>x+liveRisk(t),0),riskLimit=cap*num(s.riskPct)/100;if(ot.length>s.maxPositions)o.push(['bad','Máximo de posiciones excedido',`${ot.length}/${s.maxPositions}.`]);if(cap&&risk/cap*100>s.portfolioRiskPct)o.push(['bad','Riesgo de cartera excedido',`${pct(risk/cap*100,2)} > ${pct(s.portfolioRiskPct,1)}.`]);ot.forEach(t=>{if((isV1(t)||isV2(t))&&t.timeExitDate&&today()>=t.timeExitDate)o.push(['bad',`${t.ticker} · salida T7 vencida`,`Fecha objetivo ${t.timeExitDate}. Registrar cierre al precio real.`])});latest().forEach(a=>{let f=freshness(a),ed=daysUntil(a.earningsDate);if(f.code==='EXPIRED')o.push(['warn',`${a.ticker} · análisis caducado`,`${dateDiff(a.date)} días.`]);if((isV1(a)||isV2(a))&&trad(a.verdict)&&!a.atr14Eur)o.push(['bad',`${a.ticker} · falta ATR14 EUR`,'No se puede calcular TP 0,75×ATR al ejecutar.']);if(!isV1(a)&&!isV2(a)&&trad(a.verdict)&&(!a.entry||!a.sl||!a.tp1))o.push(['bad',`${a.ticker} · plan legacy incompleto`,'Faltan niveles.']);if(a.risk>riskLimit+.01)o.push(['bad',`${a.ticker} · riesgo excedido`,`${eur(a.risk,2)} > ${eur(riskLimit,2)}.`]);if(ed!==null&&ed>=0&&ed<=s.earningsBlockDays&&trad(a.verdict))o.push(['bad',`${a.ticker} · earnings próximos`,`${ed} días.`])});return o}
+function audits(){let o=[],s=state.settings,ot=openTrades(),cap=capital(),risk=ot.reduce((x,t)=>x+liveRisk(t),0),riskLimit=cap*num(s.riskPct)/100;if(ot.length>s.maxPositions)o.push(['bad','Máximo de posiciones excedido',`${ot.length}/${s.maxPositions}.`]);if(cap&&risk/cap*100>s.portfolioRiskPct)o.push(['bad','Riesgo de cartera excedido',`${pct(risk/cap*100,2)} > ${pct(s.portfolioRiskPct,1)}.`]);ot.forEach(t=>{if((isV1(t)||isV2(t))&&t.timeExitDate&&today()>=t.timeExitDate)o.push(['bad',`${t.ticker} · salida T7 vencida`,`Fecha objetivo ${t.timeExitDate}. Registrar cierre al precio real.`])});latest().forEach(a=>{let f=freshness(a),ed=daysUntil(a.earningsDate);if(f.code==='EXPIRED')o.push(['warn',`${a.ticker} · análisis caducado`,`${dateDiff(a.date)} días.`]);if(isV2(a)&&trad(a.verdict)&&!a.atr14Eur)o.push(['bad',`${a.ticker} · falta ATR14 EUR`,'No se pueden calcular TP1 +1 ATR y TP2 +1,5 ATR al ejecutar.']);if(isV1(a)&&trad(a.verdict)&&!a.atr14Eur)o.push(['bad',`${a.ticker} · falta ATR14 EUR`,'No se puede reconstruir el TP histórico +0,75 ATR.']);if(!isV1(a)&&!isV2(a)&&trad(a.verdict)&&(!a.entry||!a.sl||!a.tp1))o.push(['bad',`${a.ticker} · plan legacy incompleto`,'Faltan niveles.']);if(a.risk>riskLimit+.01)o.push(['bad',`${a.ticker} · riesgo excedido`,`${eur(a.risk,2)} > ${eur(riskLimit,2)}.`]);if(ed!==null&&ed>=0&&ed<=s.earningsBlockDays&&trad(a.verdict))o.push(['bad',`${a.ticker} · earnings próximos`,`${ed} días.`])});return o}
 function renderAll(){renderDash();renderRegistry();renderOps();ccRenderStats();renderCalendar();loadSettings()}
 function renderDash(){let la=latest(),cl=closedTrades(),ot=openTrades(),pnl=cl.reduce((s,t)=>s+realized(t),0),rs=cl.reduce((s,t)=>s+rMult(t),0),risk=ot.reduce((s,t)=>s+liveRisk(t),0),cap=capital(),au=audits();$('kCapital').textContent=eur(cap);$('kPnl').textContent=eur(pnl);$('kPnl').className='value '+(pnl>0?'good':pnl<0?'bad':'');$('kR').textContent=(rs>=0?'+':'')+fmt(rs,2)+'R';$('kRisk').textContent=eur(risk);$('kRiskSub').textContent=cap?pct(risk/cap*100,2)+' del capital':'';$('kSlots').textContent=`${ot.length} / ${state.settings.maxPositions}`;$('kTrad').textContent=la.filter(a=>trad(a.verdict)).length;$('kScore').textContent=la.length?fmt(la.reduce((s,a)=>s+a.newsScore,0)/la.length,1):'—';$('kAlerts').textContent=au.length;let ord={'EN OPERACIONES':0,'ARCHIVADA':1,'REGISTRO':2,'OPERACIONES':0};$('actionCenter').innerHTML=[...la].sort((a,b)=>(ord[action(a).label]??9)-(ord[action(b).label]??9)||b.newsScore-a.newsScore).slice(0,12).map(a=>{let ac=action(a);return `<div class="actionItem"><b>${logoImg(a.ticker, 16)}${a.ticker}</b><b class="${ac.cls}">${ac.label}</b><div>${esc(ac.reason)} <span class="small">Score ${fmt(a.newsScore,1)} · ${esc(a.verdict)}</span></div><button onclick="showTicker('${a.ticker}')">Ficha</button></div>`}).join('')||'<span class="muted">Aún no hay FULL SETUP completamente analizadas.</span>';$('audit').innerHTML=au.length?au.map(x=>`<div class="auditItem"><b class="${x[0]}">${esc(x[1])}</b><div class="small">${esc(x[2])}</div></div>`).join(''):'<div class="auditItem"><b class="good">Sin alertas críticas</b><div class="small">Reglas básicas correctas.</div></div>';drawEquity();renderPortfolio()}
 function renderPortfolio(){let ot=openTrades(),cap=capital(),risk=ot.reduce((s,t)=>s+liveRisk(t),0),exp=ot.reduce((s,t)=>s+num(t.currentPrice||t.entryPrice)*(num(t.shares)-num(t.tp1Shares)),0);$('portfolioSummary').innerHTML=`<div class="kv"><div>Capital actual</div><div><b>${eur(cap)}</b></div><div>Exposición viva</div><div>${eur(exp)} · ${cap?pct(exp/cap*100,1):'—'}</div><div>Riesgo vivo</div><div>${eur(risk)} · ${cap?pct(risk/cap*100,2):'—'}</div><div>Slots</div><div>${ot.length}/${state.settings.maxPositions}</div></div>`;let m={};ot.forEach(t=>{let sec=t.sector||latestFor(t.ticker)?.sector||'Unknown';m[sec]=(m[sec]||0)+liveRisk(t)});$('sectorRisk').innerHTML=Object.keys(m).length?Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="margin:7px 0"><div class="small">${esc(k)} · ${eur(v)} ${risk?'· '+pct(v/risk*100,0):''}</div><div class="meter"><i style="width:${risk?Math.min(100,v/risk*100):0}%"></i></div></div>`).join(''):'<span class="muted">Sin posiciones.</span>'}
 function drawEquity(){let c=closedTrades().sort((a,b)=>String(a.exitDate).localeCompare(String(b.exitDate))),v=[num(state.settings.capital)],l=['Inicio'],e=v[0];c.forEach(t=>{e+=realized(t);v.push(e);l.push(t.exitDate||t.ticker)});drawChart('equityChart',v,l,null,'€')}
 function shadowClass(a){let s=a.shadow;if(!s)return'NO_SHADOW';if(s.status!=='CLOSED')return'PENDING';return num(s.pnl_eur_net)>0?'WIN':'LOSS'}function liveForSetup(a){return operationViews().filter(t=>t.setupId===a.id).sort((x,y)=>String(x.createdAt||'').localeCompare(String(y.createdAt||''))).at(-1)}
 function renderRegistry(){let search=$('registrySearch'),vf=$('registryVerdict'),rf=$('registryResult');if(!search||!vf||!rf)return;let q=search.value.toLowerCase(),result=rf.value,activeIds=new Set(state.trades.filter(t=>['PLANNED','OPEN','TP1'].includes(t.status)).map(t=>t.setupId)),rows=[...state.analyses].filter(a=>!activeIds.has(a.id)).sort((a,b)=>String(b.signalDate).localeCompare(String(a.signalDate))).filter(a=>(!vf.value||a.verdict===vf.value)&&(!result||shadowClass(a)===result)&&(!q||Object.values(a).flat().join(' ').toLowerCase().includes(q)));$('registryBody').innerHTML=rows.length?rows.map(a=>{let s=a.shadow,sc=shadowClass(a),op=liveForSetup(a),shadowText=!s?'Sin dato':s.status==='CLOSED'?`${s.exit_reason||'Cierre'} · ${fmt(s.r_multiple_net,2)}R`:s.status,shadowPnl=s&&s.status==='CLOSED'?`${eur(s.pnl_eur_net,2)} · ${fmt(s.pnl_pct_net,2)}%`:'—',liveText=!op?'No ejecutada':op.status==='CLOSED'?`${op.exitReason||'Cierre'} · ${eur(realized(op),2)}`:op.status;return`<tr><td>${a.signalDate||a.date}<div class="small">Análisis ${a.analysisDate||a.date}</div></td><td class="ticker"><button onclick="showTicker('${a.ticker}')">${logoImg(a.ticker,16)}${a.ticker}</button></td><td>${vb(a.verdict)}<div class="small">${esc(a.timingStatus||'')}</div></td><td>${score(a.newsScore)}</td><td><b>${esc(a.route||'REGISTRY')}</b><div class="small">${esc(a.routingReason||'')}</div></td><td class="${sc==='WIN'?'good':sc==='LOSS'?'bad':'muted'}">${esc(shadowText)}</td><td class="${sc==='WIN'?'good':sc==='LOSS'?'bad':''}">${shadowPnl}</td><td>${esc(liveText)}</td><td>${esc(a.sector||'—')}</td><td style="min-width:260px">${esc(a.thesis||'—')}</td><td><button onclick="showTicker('${a.ticker}')">Ficha</button></td></tr>`}).join(''):'<tr><td colspan="11" class="muted">No hay FULL SETUP analizadas para este filtro.</td></tr>'}
-function renderOps(){let all=operationViews().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')),tr=all.filter(t=>['PLANNED','OPEN','TP1'].includes(t.status)),p=tr.filter(t=>t.status==='PLANNED'),o=tr.filter(t=>t.status==='OPEN'),tp=tr.filter(t=>t.status==='TP1'),c=all.filter(t=>t.status==='CLOSED'),ot=[...o,...tp],un=ot.reduce((s,t)=>s+unreal(t),0),risk=ot.reduce((s,t)=>s+liveRisk(t),0),exp=ot.reduce((s,t)=>s+num(t.currentPrice||t.entryPrice)*(num(t.shares)-num(t.tp1Shares)),0),cap=capital(),wins=c.filter(t=>realized(t)>0).length;$('oPlanned').textContent=p.length;$('oOpen').textContent=o.length;$('oTp1').textContent=tp.length;$('oClosed').textContent=c.length;$('oUnreal').textContent=eur(un);$('oRisk').textContent=eur(risk);$('oExposure').textContent=cap?pct(exp/cap*100,1):'—';$('oWin').textContent=c.length?pct(wins/c.length*100,1):'—';$('tradeBody').innerHTML=tr.length?tr.map(t=>{let pl=realized(t)+unreal(t),rr=initRisk(t)?pl/initRisk(t):0;return `<tr><td class="ticker">${logoImg(t.ticker,16)}${t.ticker}</td><td>${tb(t.status)}</td><td>${isV1(t)?'V1':'LEGACY'}</td><td>${(t.entryPrice||t.plannedEntry)?eur(t.entryPrice||t.plannedEntry,2):'Open T+1'}</td><td>${t.currentPrice?eur(t.currentPrice,2):'—'}</td><td>${(t.sl||t.plannedSl)?eur(t.sl||t.plannedSl,2):'—'}</td><td>${(t.tp1||t.plannedTp1)?eur(t.tp1||t.plannedTp1,2):'—'}</td><td>${t.timeExitDate||'—'}</td><td>${t.shares||t.plannedShares||0}</td><td class="${pl>0?'good':pl<0?'bad':''}">${eur(pl,2)}<div class="small">${(rr>=0?'+':'')+fmt(rr,2)}R</div></td><td>${eur(liveRisk(t),2)}</td><td>${tradeActions(t)}</td></tr>`}).join(''):'<tr><td colspan="12" class="muted">Sin operaciones activas. Las FULL con veredicto operable llegarán automáticamente desde ChatGPT Work.</td></tr>'}
+function renderOps(){let all=operationViews().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')),tr=all.filter(t=>['PLANNED','OPEN','TP1'].includes(t.status)),p=tr.filter(t=>t.status==='PLANNED'),o=tr.filter(t=>t.status==='OPEN'),tp=tr.filter(t=>t.status==='TP1'),c=all.filter(t=>t.status==='CLOSED'),ot=[...o,...tp],un=ot.reduce((s,t)=>s+unreal(t),0),risk=ot.reduce((s,t)=>s+liveRisk(t),0),exp=ot.reduce((s,t)=>s+num(t.currentPrice||t.entryPrice)*(num(t.shares)-num(t.tp1Shares)),0),cap=capital(),wins=c.filter(t=>realized(t)>0).length;$('oPlanned').textContent=p.length;$('oOpen').textContent=o.length;$('oTp1').textContent=tp.length;$('oClosed').textContent=c.length;$('oUnreal').textContent=eur(un);$('oRisk').textContent=eur(risk);$('oExposure').textContent=cap?pct(exp/cap*100,1):'—';$('oWin').textContent=c.length?pct(wins/c.length*100,1):'—';$('tradeBody').innerHTML=tr.length?tr.map(t=>{let pl=realized(t)+unreal(t),rr=initRisk(t)?pl/initRisk(t):0;return `<tr><td class="ticker">${logoImg(t.ticker,16)}${t.ticker}</td><td>${tb(t.status)}</td><td>${isV2(t)?'V2':isV1(t)?'V1':'LEGACY'}</td><td>${(t.entryPrice||t.plannedEntry)?eur(t.entryPrice||t.plannedEntry,2):isV2(t)?'Post-análisis':'Open T+1'}</td><td>${t.currentPrice?eur(t.currentPrice,2):'—'}</td><td>${(t.sl||t.plannedSl)?eur(t.sl||t.plannedSl,2):'—'}</td><td>${(t.tp1||t.plannedTp1)?eur(t.tp1||t.plannedTp1,2):'—'}</td><td>${t.timeExitDate||'—'}</td><td>${t.shares||t.plannedShares||0}</td><td class="${pl>0?'good':pl<0?'bad':''}">${eur(pl,2)}<div class="small">${(rr>=0?'+':'')+fmt(rr,2)}R</div></td><td>${eur(liveRisk(t),2)}</td><td>${tradeActions(t)}</td></tr>`}).join(''):'<tr><td colspan="12" class="muted">Sin operaciones activas. Las FULL con veredicto operable llegarán automáticamente desde ChatGPT Work.</td></tr>'}
 function tradeActions(t){if(t.status==='PLANNED')return `<button class="success" onclick="openExec('${t.id}')">Ejecutar</button> ${isV1(t)?'':`<button onclick="editPlan('${t.id}')">Editar</button>`} <button class="danger" onclick="delTrade('${t.id}')">×</button>`;if(t.status==='OPEN')return `<button onclick="updPrice('${t.id}')">Precio</button> <button class="success" onclick="hitTP1('${t.id}')">${isV1(t)?'Cerrar TP':'TP1'}</button> <button class="danger" onclick="closeTrade('${t.id}')">Cerrar</button>`;if(t.status==='TP1')return `<button onclick="updPrice('${t.id}')">Precio</button> <button class="success" onclick="closeTP2('${t.id}')">TP2</button> <button class="danger" onclick="closeTrade('${t.id}')">Cerrar</button>`;return `<button onclick="openPost('${t.id}')">Post-mortem</button>`}
-function ccRenderStats(){let c=state.analyses.filter(a=>a.shadow?.status==='CLOSED'),operable=c.filter(a=>trad(a.verdict)),w=operable.filter(a=>num(a.shadow.pnl_eur_net)>0),l=operable.filter(a=>num(a.shadow.pnl_eur_net)<0),rs=operable.map(a=>num(a.shadow.r_multiple_net)),avg=rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:0,gw=w.reduce((s,a)=>s+Math.max(0,num(a.shadow.pnl_eur_net)),0),gl=Math.abs(l.reduce((s,a)=>s+Math.min(0,num(a.shadow.pnl_eur_net)),0));$('sTrades').textContent=c.length;$('sWin').textContent=operable.length?pct(w.length/operable.length*100,1):'—';$('sAvgR').textContent=operable.length?fmt(avg,2)+'R':'—';$('sExpect').textContent=operable.length?fmt(avg,2)+'R/setup':'—';$('sPF').textContent=gl?fmt(gw/gl,2):(gw?'∞':'—');$('sAvgWin').textContent=w.length?eur(w.reduce((s,a)=>s+num(a.shadow.pnl_eur_net),0)/w.length):'—';$('sAvgLoss').textContent=l.length?eur(l.reduce((s,a)=>s+num(a.shadow.pnl_eur_net),0)/l.length):'—';$('sMDD').textContent=pct(maxDD(),1);$('scoreStats').innerHTML=shadowStatsTable(shadowGroup(c,a=>bucket(a.newsScore)));$('sectorStats').innerHTML=shadowStatsTable(shadowGroup(c,a=>a.sector||'Unknown'));$('reasonStats').innerHTML=shadowStatsTable(shadowGroup(c,a=>a.fallReason||'Sin clasificar'));$('verdictStats').innerHTML=verdictCalibration(c);$('calibration').innerHTML=calibrateShadow(c)}
-function shadowGroup(rows,key){let m={};rows.forEach(a=>(m[key(a)]??=[]).push(a));return Object.entries(m).map(([k,a])=>({k,n:a.length,wr:a.filter(x=>num(x.shadow.pnl_eur_net)>0).length/a.length*100,avgR:a.reduce((s,x)=>s+num(x.shadow.r_multiple_net),0)/a.length,pnl:a.reduce((s,x)=>s+num(x.shadow.pnl_eur_net),0)})).sort((a,b)=>b.avgR-a.avgR)}function shadowStatsTable(d){if(!d.length)return'<span class="muted">Aún no hay resultados Shadow cerrados.</span>';return`<table style="min-width:0"><thead><tr><th>Grupo</th><th>N</th><th>Win</th><th>R medio</th><th>P&L Shadow</th></tr></thead><tbody>${d.map(x=>`<tr><td>${esc(x.k)}</td><td>${x.n}</td><td>${pct(x.wr,0)}</td><td class="${x.avgR>0?'good':x.avgR<0?'bad':''}">${fmt(x.avgR,2)}R</td><td>${eur(x.pnl)}</td></tr>`).join('')}</tbody></table>`}function verdictCalibration(rows){if(!rows.length)return'<span class="muted">Aún no hay veredictos con resultado Shadow cerrado.</span>';let groups={};rows.forEach(a=>(groups[a.verdict||'SIN VEREDICTO']??=[]).push(a));return`<table style="min-width:0"><thead><tr><th>Veredicto</th><th>N</th><th>Métrica</th><th>R medio</th></tr></thead><tbody>${Object.entries(groups).map(([v,a])=>{let positive=a.filter(x=>num(x.shadow.pnl_eur_net)>0).length,negative=a.filter(x=>num(x.shadow.pnl_eur_net)<0).length,avoid=v==='BLOQUEADA',metric=avoid?`${pct(negative/a.length*100,0)} pérdidas evitadas`:`${pct(positive/a.length*100,0)} ganadoras`,avg=a.reduce((s,x)=>s+num(x.shadow.r_multiple_net),0)/a.length;return`<tr><td>${esc(v)}</td><td>${a.length}</td><td>${metric}</td><td class="${avg>0?'good':avg<0?'bad':''}">${fmt(avg,2)}R</td></tr>`}).join('')}</tbody></table>`}function calibrateShadow(c){if(c.length<5)return`<div class="auditItem"><b>Faltan datos</b><div class="small">Con ${c.length} resultados Shadow cerrados todavía no conviene cambiar reglas. Espera al menos 20–30.</div></div>`;let onTime=c.filter(a=>a.timingStatus!=='LATE_ANALYSIS'),late=c.length-onTime.length,ops=onTime.filter(a=>trad(a.verdict)),blocked=onTime.filter(a=>a.verdict==='BLOQUEADA'),avoided=blocked.filter(a=>num(a.shadow.pnl_eur_net)<0).length;return`<div class="auditItem"><b class="good">Muestra válida: ${onTime.length}</b><div class="small">${ops.length} operables · ${blocked.length} bloqueadas · ${late} análisis tardíos excluidos.</div></div><div class="auditItem"><b>Bloqueos acertados</b><div class="small">${blocked.length?pct(avoided/blocked.length*100,1):'—'} de las BLOQUEADAS habrían perdido.</div></div>`}
+const entryVerdict=a=>a.verdictOriginal||a.shadow?.original_verdict||a.verdict,entryNewsScore=a=>a.newsScoreOriginal??a.newsScore;
+function ccRenderStats(){let c=state.analyses.filter(a=>a.shadow?.status==='CLOSED'),operable=c.filter(a=>trad(entryVerdict(a))),w=operable.filter(a=>num(a.shadow.pnl_eur_net)>0),l=operable.filter(a=>num(a.shadow.pnl_eur_net)<0),rs=operable.map(a=>num(a.shadow.r_multiple_net)),avg=rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:0,gw=w.reduce((s,a)=>s+Math.max(0,num(a.shadow.pnl_eur_net)),0),gl=Math.abs(l.reduce((s,a)=>s+Math.min(0,num(a.shadow.pnl_eur_net)),0));$('sTrades').textContent=c.length;$('sWin').textContent=operable.length?pct(w.length/operable.length*100,1):'—';$('sAvgR').textContent=operable.length?fmt(avg,2)+'R':'—';$('sExpect').textContent=operable.length?fmt(avg,2)+'R/setup':'—';$('sPF').textContent=gl?fmt(gw/gl,2):(gw?'∞':'—');$('sAvgWin').textContent=w.length?eur(w.reduce((s,a)=>s+num(a.shadow.pnl_eur_net),0)/w.length):'—';$('sAvgLoss').textContent=l.length?eur(l.reduce((s,a)=>s+num(a.shadow.pnl_eur_net),0)/l.length):'—';$('sMDD').textContent=pct(maxDD(),1);$('scoreStats').innerHTML=shadowStatsTable(shadowGroup(c,a=>bucket(entryNewsScore(a))));$('sectorStats').innerHTML=shadowStatsTable(shadowGroup(c,a=>a.sector||'Unknown'));$('reasonStats').innerHTML=shadowStatsTable(shadowGroup(c,a=>a.fallReason||'Sin clasificar'));$('verdictStats').innerHTML=verdictCalibration(c);$('calibration').innerHTML=calibrateShadow(c)}
+function shadowGroup(rows,key){let m={};rows.forEach(a=>(m[key(a)]??=[]).push(a));return Object.entries(m).map(([k,a])=>({k,n:a.length,wr:a.filter(x=>num(x.shadow.pnl_eur_net)>0).length/a.length*100,avgR:a.reduce((s,x)=>s+num(x.shadow.r_multiple_net),0)/a.length,pnl:a.reduce((s,x)=>s+num(x.shadow.pnl_eur_net),0)})).sort((a,b)=>b.avgR-a.avgR)}function shadowStatsTable(d){if(!d.length)return'<span class="muted">Aún no hay resultados Shadow cerrados.</span>';return`<table style="min-width:0"><thead><tr><th>Grupo</th><th>N</th><th>Win</th><th>R medio</th><th>P&L Shadow</th></tr></thead><tbody>${d.map(x=>`<tr><td>${esc(x.k)}</td><td>${x.n}</td><td>${pct(x.wr,0)}</td><td class="${x.avgR>0?'good':x.avgR<0?'bad':''}">${fmt(x.avgR,2)}R</td><td>${eur(x.pnl)}</td></tr>`).join('')}</tbody></table>`}function verdictCalibration(rows){if(!rows.length)return'<span class="muted">Aún no hay veredictos con resultado Shadow cerrado.</span>';let groups={};rows.forEach(a=>(groups[entryVerdict(a)||'SIN VEREDICTO']??=[]).push(a));return`<table style="min-width:0"><thead><tr><th>Veredicto inicial</th><th>N</th><th>Métrica</th><th>R medio</th></tr></thead><tbody>${Object.entries(groups).map(([v,a])=>{let positive=a.filter(x=>num(x.shadow.pnl_eur_net)>0).length,negative=a.filter(x=>num(x.shadow.pnl_eur_net)<0).length,avoid=v==='BLOQUEADA',metric=avoid?`${pct(negative/a.length*100,0)} pérdidas evitadas`:`${pct(positive/a.length*100,0)} ganadoras`,avg=a.reduce((s,x)=>s+num(x.shadow.r_multiple_net),0)/a.length;return`<tr><td>${esc(v)}</td><td>${a.length}</td><td>${metric}</td><td class="${avg>0?'good':avg<0?'bad':''}">${fmt(avg,2)}R</td></tr>`}).join('')}</tbody></table>`}function calibrateShadow(c){if(c.length<5)return`<div class="auditItem"><b>Faltan datos</b><div class="small">Con ${c.length} resultados Shadow cerrados todavía no conviene cambiar reglas. Espera al menos 20–30.</div></div>`;let onTime=c.filter(a=>a.timingStatus!=='LATE_ANALYSIS'),late=c.length-onTime.length,ops=onTime.filter(a=>trad(entryVerdict(a))),blocked=onTime.filter(a=>entryVerdict(a)==='BLOQUEADA'),avoided=blocked.filter(a=>num(a.shadow.pnl_eur_net)<0).length;return`<div class="auditItem"><b class="good">Muestra válida: ${onTime.length}</b><div class="small">${ops.length} operables · ${blocked.length} bloqueadas · ${late} análisis tardíos excluidos.</div></div><div class="auditItem"><b>Bloqueos acertados</b><div class="small">${blocked.length?pct(avoided/blocked.length*100,1):'—'} de las BLOQUEADAS habrían perdido.</div></div>`}
 function bucket(s){s=num(s);return s>=8?'8,0–10':s>=7?'7,0–7,9':s>=6?'6,0–6,9':s>=5?'5,0–5,9':'<5'}function maxDD(){let c=state.trades.filter(t=>t.status==='CLOSED').sort((a,b)=>String(a.exitDate).localeCompare(String(b.exitDate))),e=num(state.settings.capital),peak=e,m=0;c.forEach(t=>{e+=realized(t);peak=Math.max(peak,e);m=Math.max(m,peak?(peak-e)/peak*100:0)});return m}
 function renderCalendar(){let y=calDate.getFullYear(),m=calDate.getMonth(),first=new Date(y,m,1),start=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate();$('calendarTitle').textContent=new Intl.DateTimeFormat('es-ES',{month:'long',year:'numeric'}).format(first);let h=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(x=>`<div class="calHead">${x}</div>`).join(''),cells='';for(let i=0;i<42;i++){let d=i-start+1,cm=m,cy=y,off=false;if(d<1){d=prev+d;cm=m-1;off=true;if(cm<0){cm=11;cy--}}else if(d>days){d-=days;cm=m+1;off=true;if(cm>11){cm=0;cy++}}let ds=`${cy}-${String(cm+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,ev=[];latest().forEach(a=>{if(a.earningsDate===ds)ev.push(`<div class="event bad">Earnings · ${a.ticker}</div>`);let x=new Date(a.date+'T12:00:00');x.setDate(x.getDate()+num(state.settings.expireDays));if(x.toISOString().slice(0,10)===ds)ev.push(`<div class="event warn">Caduca · ${a.ticker}</div>`)});operationViews().forEach(t=>{if(t.entryDate===ds)ev.push(`<div class="event good">Entrada · ${t.ticker}</div>`);if(t.tp1Date===ds)ev.push(`<div class="event cyan">TP1 · ${t.ticker}</div>`);if(t.exitDate===ds)ev.push(`<div class="event">Cierre · ${t.ticker}</div>`)});cells+=`<div class="day ${off?'off':''}"><div class="dayNum">${d}</div>${ev.join('')}</div>`}$('calendarGrid').innerHTML=h+cells}function changeMonth(n){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+n,1);renderCalendar()}function calendarToday(){calDate=new Date();renderCalendar()}
 function loadSettings(){let s=state.settings;$('setCapital').value=s.capital;$('setRiskPct').value=1.5;$('setMaxPositions').value=3;$('setPortfolioRisk').value=4.5;$('setWarnDays').value=s.warnDays;$('setExpireDays').value=s.expireDays;$('setEarningsDays').value=s.earningsBlockDays;$('setMovePct').value=s.moveReanalysePct;$('setControlToken').value=sessionStorage.getItem('sidiControlToken')||''}function saveSettings(){let capitalBase=num($('setCapital').value),token=$('setControlToken').value.trim();if(token)sessionStorage.setItem('sidiControlToken',token);else sessionStorage.removeItem('sidiControlToken');state.settings={...state.settings,capital:capitalBase,riskPct:1.5,riskMax:capitalBase*.015,maxPositions:3,portfolioRiskPct:4.5,warnDays:num($('setWarnDays').value),expireDays:num($('setExpireDays').value),earningsBlockDays:num($('setEarningsDays').value),moveReanalysePct:num($('setMovePct').value)};save();renderAll()}function resetSettings(){state.settings={...DEF};save();renderAll()}
-function chartLevelsForTicker(ticker,a){let trades=operationViews().filter(x=>x.ticker===ticker).sort((x,y)=>String(x.createdAt||'').localeCompare(String(y.createdAt||''))),tr=trades.at(-1),entry=0,tp=0,sl=0,alreadyUsd=false;if(tr&&tr.status!=='PLANNED'){entry=num(tr.entryPrice);tp=num(tr.tp1);sl=num(tr.initialSl||tr.sl)}else if(a.shadow&&(a.shadow.entry_open||a.shadow.target_price||a.shadow.stop_price)){entry=num(a.shadow.entry_open);tp=num(a.shadow.target_price);sl=num(a.shadow.stop_price);alreadyUsd=true}else if(!isV1(a)){entry=num(a.entry);tp=num(a.tp1);sl=num(a.sl)}let fx=a.priceEur&&a.priceUsd?a.priceUsd/a.priceEur:1,toChart=v=>v?(alreadyUsd?v:v*fx):0;return[{label:'Entrada',value:toChart(entry),color:'blue'},{label:'TP',value:toChart(tp),color:'green'},{label:'SL',value:toChart(sl),color:'red'}].filter(x=>x.value>0)}
-function showTicker(t){let list=analysesFor(t),a=list.at(-1);if(!a)return;$('tickerTitle').textContent=`${t} · ${a.company||''}`;$('tickerDetail').innerHTML=`<div class="grid two"><div><div class="kv"><div>Sector</div><div>${esc(a.sector||'—')} / ${esc(a.subsector||'—')}</div><div>News Score</div><div>${score(a.newsScore)}</div><div>Veredicto</div><div>${vb(a.verdict)}</div><div>Precio ref.</div><div>${a.priceEur?eur(a.priceEur,2):'—'}</div><div>Entrada / SL</div><div>${isV1(a)?'Open T+1 / −5 % al ejecutar':`${a.entry?eur(a.entry,2):'—'} / ${a.sl?eur(a.sl,2):'—'}`}</div><div>TP</div><div>${isV1(a)?'Open T+1 + 0,75×ATR14':a.tp1?eur(a.tp1,2):'—'}</div><div>Earnings</div><div>${a.earningsDate||'—'}</div><div>Motivo caída</div><div>${esc(a.fallReason||'—')}</div></div><h3>Tesis</h3>${esc(a.thesis||'—')}</div><div><h3>Blockers</h3>${chips(a.blockers)}<h3>Penalties</h3>${chips(a.penalties)}<h3>Catalizadores</h3>${chips(a.catalysts)}</div></div><h3>Precio · Entrada / TP / SL</h3><div id="tickerPriceChart"></div><h3>Evolución de score</h3><div id="tickerChart" class="chart"></div><h3>Historial</h3><div class="timeline">${[...list].reverse().map(x=>`<div class="timelineItem"><div><b>${x.date}</b><div class="small">${fmt(x.newsScore,1)}/10</div></div><div>${vb(x.verdict)} <span class="small">${esc(x.decision||'')}</span><div>${esc(x.thesis||'')}</div></div></div>`).join('')}</div>`;ccOpenModal('tickerModal');mountPriceChart($('tickerPriceChart'),t,{levels:chartLevelsForTicker(t,a)});setTimeout(()=>drawChart('tickerChart',list.map(x=>x.newsScore),list.map(x=>x.date),7,''),0)}function chips(a){return a&&a.length?`<div class="chips">${a.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:'<span class="muted">Ninguno.</span>'}
+function chartLevelsForTicker(ticker,a){let trades=operationViews().filter(x=>x.ticker===ticker).sort((x,y)=>String(x.createdAt||'').localeCompare(String(y.createdAt||''))),tr=trades.at(-1),entry=0,tp1=0,tp2=0,sl=0,alreadyUsd=false;if(tr&&tr.status!=='PLANNED'){entry=num(tr.entryPrice);tp1=num(tr.tp1);tp2=num(tr.tp2);sl=num(tr.initialSl||tr.sl)}else if(a.shadow&&(a.shadow.entry_open||a.shadow.entry_price_usd)){entry=num(a.shadow.entry_open||a.shadow.entry_price_usd);tp1=num(a.shadow.target_price||a.shadow.tp1_price_usd);tp2=num(a.shadow.tp2_price_usd);sl=num(a.shadow.stop_price||a.shadow.stop_price_usd);alreadyUsd=true}else if(isV2(a)){entry=num(a.entry||a.priceEur);sl=num(a.sl)||entry*.95;tp1=num(a.tp1)||(entry&&a.atr14Eur?entry+num(a.atr14Eur):0);tp2=num(a.tp2)||(entry&&a.atr14Eur?entry+1.5*num(a.atr14Eur):0)}else if(!isV1(a)){entry=num(a.entry);tp1=num(a.tp1);tp2=num(a.tp2);sl=num(a.sl)}let fx=a.priceEur&&a.priceUsd?a.priceUsd/a.priceEur:1,toChart=v=>v?(alreadyUsd?v:v*fx):0;return[{label:'Entrada',value:toChart(entry),color:'blue'},{label:tp2?'TP1':'TP',value:toChart(tp1),color:'green'},{label:'TP2',value:toChart(tp2),color:'green'},{label:'SL',value:toChart(sl),color:'red'}].filter(x=>x.value>0)}
+function showTicker(t){let list=analysesFor(t),a=list.at(-1);if(!a)return;let revisions=a.revisions?.length?a.revisions:list,news=a.newsItems||[];$('tickerTitle').textContent=`${t} · ${a.company||''}`;$('tickerDetail').innerHTML=`<div class="grid two"><div><div class="kv"><div>Sector</div><div>${esc(a.sector||'—')} / ${esc(a.subsector||'—')}</div><div>News Score</div><div>${score(a.newsScore)}</div><div>Veredicto</div><div>${vb(a.verdict)}</div><div>Episodio</div><div>${esc(a.episodeId||'Histórico')}</div><div>Revisiones</div><div>${a.revisionCount||revisions.length}</div><div>Precio ref.</div><div>${a.priceEur?eur(a.priceEur,2):'—'}</div><div>Earnings</div><div>${a.earningsDate||'—'}</div><div>Motivo caída</div><div>${esc(a.fallReason||'—')}</div></div><h3>Tesis</h3>${esc(a.thesis||'—')}</div><div><h3>Puntos fuertes</h3>${chips(a.strengths||a.catalysts)}<h3>Puntos débiles</h3>${chips(a.weaknesses||a.penalties)}<h3>Bloqueadores</h3>${chips(a.blockers)}</div></div><h3>Precio · Entrada / TP / SL</h3><div id="tickerPriceChart"></div><h3>Noticias del último análisis</h3><div class="timeline">${news.length?news.map(n=>`<div class="timelineItem"><div><b>${esc(n.publishedAt||'—')}</b><div class="small">${esc(n.source||'')}</div></div><div><a href="${safeUrl(n.url)}" target="_blank" rel="noopener">${esc(n.title||'Sin titular')}</a> <span class="small">${esc(n.impact||'')}</span><div>${esc(n.summary||'')}</div></div></div>`).join(''):'<span class="muted">Sin noticias estructuradas.</span>'}</div><h3>Evolución del episodio</h3><div id="tickerChart" class="chart"></div><h3>Revisiones</h3><div class="timeline">${[...revisions].reverse().map(x=>`<div class="timelineItem"><div><b>${x.analysisDate||x.date}</b><div class="small">${fmt(x.newsScore,1)}/10</div></div><div>${vb(x.verdict)} <span class="small">${esc(x.decision||x.payload?.decision||'')}</span><div>${esc(x.thesis||x.payload?.thesis_short||'')}</div></div></div>`).join('')}</div>`;ccOpenModal('tickerModal');mountPriceChart($('tickerPriceChart'),t,{levels:chartLevelsForTicker(t,a)});setTimeout(()=>drawChart('tickerChart',revisions.map(x=>x.newsScore),revisions.map(x=>x.analysisDate||x.date),7,''),0)}function chips(a){return a&&a.length?`<div class="chips">${a.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:'<span class="muted">Ninguno.</span>'}
 function createPlan(id){let a=state.analyses.find(x=>x.id===id);$('tradeTitle').textContent=`Crear plan · ${a.ticker}`;if(isV1(a)||isV2(a)){$('tradeForm').innerHTML=`<div class="formgrid"><div class="span4 auditItem"><b>${isV2(a)?'SIDI_INTRADAY_V2':'SIDI_SHADOW_V1'}</b><div class="small">${isV2(a)?'Entrada: precio real posterior al veredicto · TP1 +1 ATR (50 %) · TP2 +1,5 ATR · SL −5 % · BE tras TP1':'Entrada histórica: Open T+1 · TP +0,75 ATR · SL −5 %'} · ATR14 señal: ${a.atr14Eur?eur(a.atr14Eur,2):'faltante'} · T7 · riesgo ${fmt(state.settings.riskPct,1)} %.</div></div><label class="span4">Motivo de la caída<input id="fReason" value="${esc(a.fallReason||'')}"></label><div class="span4 toolbar" style="justify-content:flex-end"><button class="primary" onclick="savePlan('${id}')" ${a.atr14Eur?'':'disabled'}>${isV2(a)?'Preparar entrada post-análisis':'Preparar Open T+1'}</button></div></div>`}else{$('tradeForm').innerHTML=`<div class="formgrid"><div class="span4 auditItem"><b>Plan LEGACY</b></div><label>Entrada ideal €<input id="fEntry" type="number" step=".01" value="${a.entry||''}"></label><label>SL €<input id="fSl" type="number" step=".01" value="${a.sl||''}"></label><label>TP1 €<input id="fTp1" type="number" step=".01" value="${a.tp1||''}"></label><label>TP2 €<input id="fTp2" type="number" step=".01" value="${a.tp2||''}"></label><label>Acciones<input id="fShares" type="number" value="${a.shares||''}"></label><label>Riesgo previsto €<input id="fRisk" type="number" step=".01" value="${a.risk||''}"></label><label>Motivo caída<input id="fReason" value="${esc(a.fallReason||'')}"></label><div class="span4 toolbar" style="justify-content:flex-end"><button class="primary" onclick="savePlan('${id}')">Guardar plan</button></div></div>`}ccOpenModal('tradeModal')}
 function savePlan(id){let a=state.analyses.find(x=>x.id===id),v1=isV1(a),v2=isV2(a),auto=v1||v2;if(auto&&!a.atr14Eur){alert('Falta ATR14 en EUR.');return}if(state.trades.some(t=>t.setupId===id&&['PLANNED','OPEN','TP1'].includes(t.status))){alert('Este setup ya está en Operaciones.');return}state.trades.push({id:uid('O'),setupId:id,status:'PLANNED',createdAt:new Date().toISOString(),plannedEntry:v2?num(a.entry||a.priceEur):v1?0:num($('fEntry').value),plannedSl:auto?0:num($('fSl').value),plannedTp1:auto?0:num($('fTp1').value),plannedTp2:auto?0:num($('fTp2').value),plannedShares:auto?0:num($('fShares').value),plannedRisk:auto?capital()*.015:num($('fRisk').value)});a.route='OPERATIONS';a.routingReason='MANUAL_ROUTE';save();ccCloseModal('tradeModal');renderAll();switchView('operations')}
 function editPlan(id){let t=state.trades.find(x=>x.id===id),v=opView(t);$('tradeTitle').textContent=`Editar · ${v.ticker}`;$('tradeForm').innerHTML=`<div class="formgrid"><label>Entrada €<input id="fEntry" type="number" value="${t.plannedEntry}"></label><label>SL €<input id="fSl" type="number" value="${t.plannedSl}"></label><label>TP1 €<input id="fTp1" type="number" value="${t.plannedTp1}"></label><label>TP2 €<input id="fTp2" type="number" value="${t.plannedTp2}"></label><label>Acciones<input id="fShares" type="number" value="${t.plannedShares}"></label><div class="span4"><button class="primary" onclick="saveEdit('${id}')">Guardar</button></div></div>`;ccOpenModal('tradeModal')}function saveEdit(id){let t=state.trades.find(x=>x.id===id);t.plannedEntry=num($('fEntry').value);t.plannedSl=num($('fSl').value);t.plannedTp1=num($('fTp1').value);t.plannedTp2=num($('fTp2').value);t.plannedShares=num($('fShares').value);save();ccCloseModal('tradeModal');renderAll()}
@@ -6498,17 +6575,17 @@ function ccCloseModal(id){
   el.style.display='none';
 }
 function strip(s){return String(s||'').trim().replace(/^```(?:csv|json|text)?\s*/i,'').replace(/\s*```$/,'').trim()}function val(o,...k){for(let x of k)if(o&&o[x]!==undefined&&o[x]!==null)return o[x];return ''}
-function norm(o){let priceEur=num(val(o,'Precio EUR','price_eur','price_current_eur')),priceUsd=num(val(o,'Precio USD','price_usd','price_current_usd')),atrUsd=num(val(o,'ATR14 USD','atr14_usd','atr14_signal','atr_14','atr14')),atrEur=num(val(o,'ATR14 EUR','atr14_eur','atr14_signal_eur')),analysisDate=String(val(o,'analysis_date','Fecha análisis','Fecha','date')||today()).slice(0,10),signalDate=String(val(o,'signal_date','Fecha señal','price_date')||'').slice(0,10);if(!atrEur&&atrUsd&&priceEur&&priceUsd)atrEur=atrUsd*priceEur/priceUsd;return{id:uid('S'),date:analysisDate,analysisDate,signalDate,ticker:String(val(o,'Ticker','ticker')).trim().toUpperCase(),company:String(val(o,'Empresa','company','name')||''),sector:String(val(o,'Sector','sector')||''),subsector:String(val(o,'Subsector','subsector')||''),priceEur,priceUsd,dd60:num(val(o,'DD60d','dd60d_pct','dd60','drawdown_60d_pct')),rsi:num(val(o,'RSI','rsi_14')),newsScore:num(val(o,'News Score','news_score','score')),verdict:String(val(o,'Veredicto','verdict','veredicto')||'').toUpperCase(),confidence:String(val(o,'Confianza','confidence')||''),dataQuality:String(val(o,'Data Quality','data_quality')||''),decision:String(val(o,'Decisión','Decision','decision')||''),strategyVersion:String(val(o,'Versión','strategy_version','sidi_strategy_version')||'LEGACY'),fullSetup:boolVal(val(o,'full_setup','sidi_full_setup')),atr14Eur:atrEur,entryRule:String(val(o,'entry_rule','sidi_entry_rule')||''),entry:num(val(o,'Entrada EUR','entry_reference_eur','entry_ideal_eur','entrada','price_current_eur')),entryAlt:num(val(o,'Entrada alternativa EUR','entry_alternative_eur')),sl:num(val(o,'SL EUR','stop_loss_eur','sl')),tp1:num(val(o,'TP EUR','TP1 EUR','tp_eur','tp1_eur','tp1')),tp2:num(val(o,'TP2 EUR','tp2_eur','tp2')),shares:num(val(o,'Acciones','shares','acciones')),risk:num(val(o,'Riesgo EUR','max_risk_eur','riesgo')),notional:num(val(o,'Notional EUR','notional_eur','notional')),earningsDate:String(val(o,'Earnings','earnings_date_next')||''),fallReason:String(val(o,'Motivo caída','fall_reason')||''),blockers:arr(val(o,'Blockers','blockers')),penalties:arr(val(o,'Penalties','penalties')),catalysts:arr(val(o,'Catalizadores','catalysts')),thesis:String(val(o,'Comentario LOG','thesis_short','comentario','thesis')||'')}}
+function norm(o){let priceEur=num(val(o,'Precio EUR','price_eur','price_current_eur')),priceUsd=num(val(o,'Precio USD','price_usd','price_current_usd')),atrUsd=num(val(o,'ATR14 USD','atr14_signal_usd','atr14_usd','atr14_signal','atr_14','atr14')),atrEur=num(val(o,'ATR14 EUR','atr14_eur','atr14_signal_eur')),analysisDate=String(val(o,'analysis_date','Fecha análisis','Fecha','date')||today()).slice(0,10),signalDate=String(val(o,'signal_date','Fecha señal','price_date')||'').slice(0,10);if(!atrEur&&atrUsd&&priceEur&&priceUsd)atrEur=atrUsd*priceEur/priceUsd;return{id:uid('S'),date:analysisDate,analysisDate,signalDate,ticker:String(val(o,'Ticker','ticker')).trim().toUpperCase(),company:String(val(o,'Empresa','company','name')||''),sector:String(val(o,'Sector','sector')||''),subsector:String(val(o,'Subsector','subsector')||''),priceEur,priceUsd,dd60:num(val(o,'DD60d','dd60d_pct','dd60','drawdown_60d_pct')),rsi:num(val(o,'RSI','rsi_14')),newsScore:num(val(o,'News Score','news_score','score')),verdict:String(val(o,'Veredicto','verdict','veredicto')||'').toUpperCase(),confidence:String(val(o,'Confianza','confidence')||''),dataQuality:String(val(o,'Data Quality','data_quality')||''),decision:String(val(o,'Decisión','Decision','decision')||''),strategyVersion:String(val(o,'Versión','strategy_version','sidi_strategy_version')||'LEGACY'),fullSetup:boolVal(val(o,'full_setup','sidi_full_setup')),atr14Usd:atrUsd,atr14Eur:atrEur,entryRule:String(val(o,'entry_rule','sidi_entry_rule')||''),entry:num(val(o,'Entrada EUR','entry_reference_eur','entry_ideal_eur','entrada','price_current_eur')),entryAlt:num(val(o,'Entrada alternativa EUR','entry_alternative_eur')),sl:num(val(o,'SL EUR','stop_loss_eur','sl')),tp1:num(val(o,'TP EUR','TP1 EUR','tp_eur','tp1_eur','tp1')),tp2:num(val(o,'TP2 EUR','tp2_eur','tp2')),shares:num(val(o,'Acciones','shares','acciones')),risk:num(val(o,'Riesgo EUR','max_risk_eur','riesgo')),notional:num(val(o,'Notional EUR','notional_eur','notional')),earningsDate:String(val(o,'Earnings','earnings_date_next')||''),fallReason:String(val(o,'Motivo caída','fall_reason')||''),blockers:arr(val(o,'Blockers','blockers')),penalties:arr(val(o,'Penalties','penalties')),catalysts:arr(val(o,'Catalizadores','catalysts')),strengths:arr(val(o,'Puntos fuertes','strengths','catalysts')),weaknesses:arr(val(o,'Puntos débiles','weaknesses','penalties')),newsItems:Array.isArray(val(o,'news_items'))?val(o,'news_items'):[],thesis:String(val(o,'Comentario LOG','thesis_short','comentario','thesis')||'')}}
 function parseCSV(text){let out=[],row=[],f='',q=false;for(let i=0;i<text.length;i++){let c=text[i],n=text[i+1];if(q){if(c==='"'&&n==='"'){f+='"';i++}else if(c==='"')q=false;else f+=c}else{if(c==='"')q=true;else if(c===','){row.push(f);f=''}else if(c==='\n'){row.push(f);out.push(row);row=[];f=''}else if(c!=='\r')f+=c}}row.push(f);if(row.some(x=>x!==''))out.push(row);if(out.length<2)throw new Error('CSV sin filas');let h=out[0].map(x=>x.trim());return out.slice(1).filter(r=>r.length).map(a=>{let o={};h.forEach((k,i)=>o[k]=a[i]??'');return norm(o)})}
 function parseJSON(text){let j=JSON.parse(text),p=j.sidi_excel_payload||j;if(Array.isArray(p))return p.map(norm);if(Array.isArray(p.positions))return p.positions.map(x=>{let tp=x.trade_plan||{},rp=x.risk_plan||{},tech=x.technical||{},sel=x.selection||{},merged={...x,...tp,'analysis_date':p.analysis_date||x.analysis_date,'signal_date':x.signal_date||tech.price_date||p.signal_date,'strategy_version':x.strategy_version||tp.strategy_version||rp.strategy_version||sel.strategy_version||p.strategy_version,'full_setup':x.full_setup??x.sidi_full_setup??sel.full_setup,'atr14_signal':x.atr14_signal||tp.atr14_signal||rp.atr14_signal||tech.atr,'entry_rule':x.entry_rule||rp.entry_rule};return norm(merged)});return[norm(p)]}
 function routeSetup(a){let ops=state.trades.filter(t=>t.setupId===a.id),closed=ops.find(t=>t.status==='CLOSED'),live=ops.find(t=>['OPEN','TP1'].includes(t.status)),planned=ops.find(t=>t.status==='PLANNED'),cancelled=ops.find(t=>t.status==='CANCELLED'),timing=analysisTiming(a),operable=trad(a.verdict),now=new Date().toISOString();if(closed){a.route='REGISTRY';a.routingReason='LIVE_CLOSED';a.timingStatus=timing.status;return}if(live){a.route='OPERATIONS';a.routingReason='ACTIVE_OPERATION';a.timingStatus=timing.status;return}if(operable&&timing.ok&&a.atr14Eur){a.route='OPERATIONS';a.routingReason=timing.reason;a.timingStatus=timing.status;if(!planned&&cancelled){cancelled.status='PLANNED';cancelled.createdAt=now;delete cancelled.cancelReason;delete cancelled.cancelledAt}else if(!planned)state.trades.push({id:uid('O'),setupId:a.id,status:'PLANNED',createdAt:now})}else{a.route='REGISTRY';a.timingStatus=timing.status;a.routingReason=!operable?`VERDICT_${String(a.verdict||'').replaceAll(' ','_')}`:!timing.ok?timing.reason:'MISSING_ATR';if(planned){planned.status='CANCELLED';planned.cancelReason=a.routingReason;planned.cancelledAt=now}}}
 function upsert(a,doSave=true){if(!a.ticker)return false;a.strategyVersion=a.strategyVersion||'LEGACY';let rawSignalDate=String(a.signalDate||'').slice(0,10);if((isV1(a)||isV2(a))&&!/^\d{4}-\d{2}-\d{2}$/.test(rawSignalDate))throw new Error(`signal_date obligatorio para ${a.ticker} en ${a.strategyVersion}`);a.signalDate=rawSignalDate||String(a.date||today()).slice(0,10);a.analysisDate=String(a.analysisDate||a.date||today()).slice(0,10);a.date=a.analysisDate;a.setupKey=setupKey(a);if(!a.fullSetup)return false;let i=state.analyses.findIndex(x=>setupKey(x)===a.setupKey),now=new Date().toISOString();if(i>=0){let old=state.analyses[i];a.id=old.id;a.createdAt=old.createdAt||now;a.verdictOriginal=old.verdictOriginal||old.verdict;a.newsScoreOriginal=old.newsScoreOriginal??old.newsScore;a.revision=num(old.revision||1)+1;a.updatedAt=now;state.analyses[i]={...old,...a};routeSetup(state.analyses[i])}else{a.id=a.id||uid('S');a.createdAt=now;a.updatedAt=now;a.analysisCompletedAt=now;a.verdictOriginal=a.verdict;a.newsScoreOriginal=a.newsScore;a.revision=1;state.analyses.push(a);routeSetup(a)}if(doSave)save();return true}function importSidi(){try{let t=strip($('importText').value);if(!t)throw new Error('Pega CSV o JSON');let parsed=/^[\[{]/.test(t)?parseJSON(t):parseCSV(t),n=0;parsed.forEach(x=>{if(upsert(x,false))n++});save();ccCloseModal('importModal');renderAll();alert(`${n} FULL SETUP analizada(s) importada(s).`)}catch(e){alert('No pude importar: '+e.message)}}function delAnalysis(id){if(state.trades.some(t=>t.setupId===id)){alert('No se puede eliminar: el setup tiene historial operativo enlazado.');return}if(confirm('¿Eliminar este setup del registro maestro?')){state.analyses=state.analyses.filter(a=>a.id!==id);save();renderAll()}}
 function csvCell(v){let s=String(v??'');return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
 function download(n,t,d){let b=new Blob([d],{type:t}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-function exportBackup(){let stamp=today();download(`SIDI_Control_Center_V6_${stamp}.json`,'application/json;charset=utf-8',JSON.stringify({app:'SIDI Control Center',version:'6.0',schemaVersion:CC_SCHEMA_VERSION,exportedAt:new Date().toISOString(),...state},null,2))}
+function exportBackup(){let stamp=today();download(`SIDI_Control_Center_V7_${stamp}.json`,'application/json;charset=utf-8',JSON.stringify({app:'SIDI Control Center',version:'7.0',schemaVersion:CC_SCHEMA_VERSION,exportedAt:new Date().toISOString(),...state},null,2))}
 function exportAnalysesCSV(){let h=['Fecha','Ticker','Empresa','Sector','Subsector','Precio EUR','DD60d','RSI','News Score','Veredicto','Confianza','Data Quality','Decisión','Entrada EUR','SL EUR','TP EUR','Acciones','Riesgo EUR','Notional EUR','Earnings','Motivo caída','Comentario LOG'],l=[h.join(';'),...state.analyses.map(a=>[a.date,a.ticker,a.company,a.sector,a.subsector,a.priceEur,a.dd60,a.rsi,a.newsScore,a.verdict,a.confidence,a.dataQuality,a.decision,a.entry,a.sl,a.tp1,a.shares,a.risk,a.notional,a.earningsDate,a.fallReason,a.thesis].map(csvCell).join(';'))];download('sidi_analisis.csv','text/csv;charset=utf-8','\ufeff'+l.join('\n'))}
 function exportTradesCSV(){let h=['Setup ID','Ticker','Estado','Versión','Fecha señal','Fecha entrada','Entrada EUR','Acciones','SL inicial','TP EUR','T7','Salida EUR','Fecha salida','Motivo salida','P&L EUR','R','News Score entrada','Veredicto entrada','Sector','Motivo caída','Tesis correcta','Plan respetado','Error'],l=[h.join(';'),...operationViews().map(t=>[t.setupId,t.ticker,t.status,t.strategyVersion||'LEGACY',t.signalDate,t.entryDate,t.entryPrice,t.shares,t.initialSl,t.tp1,t.timeExitDate,t.exitPrice,t.exitDate,t.exitReason,realized(t),rMult(t),t.analysisNewsScore,t.analysisVerdict,t.sector,t.fallReason,t.postmortem?.thesis||'',t.postmortem?.plan||'',t.postmortem?.error||''].map(csvCell).join(';'))];download('sidi_operaciones.csv','text/csv;charset=utf-8','\ufeff'+l.join('\n'))}
-function exportExcelBackup(){let cols=['Setup ID','Versión','Fecha señal','Fecha análisis','Ticker','Veredicto','News Score','Ruta','Motivo ruta','Timing','Shadow estado','Shadow salida','Shadow P&L EUR','Shadow R','LIVE estado','Entrada EUR','SL EUR','TP EUR','Salida EUR','LIVE P&L EUR','LIVE R','Sector','Tesis'],rows=[cols.join(';')];state.analyses.forEach(a=>{let s=a.shadow||{},op=liveForSetup(a);rows.push([a.id,a.strategyVersion,a.signalDate,a.analysisDate,a.ticker,a.verdict,a.newsScore,a.route,a.routingReason,a.timingStatus,s.status,s.exit_reason,s.pnl_eur_net,s.r_multiple_net,op?.status||'NO_EJECUTADA',op?.entryPrice,op?.initialSl||op?.sl,op?.tp1,op?.exitPrice,op?realized(op):'',op?rMult(op):'',a.sector,a.thesis].map(csvCell).join(';'))});download(`SIDI_Backup_Excel_V6_${today()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'))}
+function exportExcelBackup(){let cols=['Setup ID','Episodio','Versión','Fecha señal','Fecha análisis','Ticker','Veredicto','News Score','Ruta','Motivo ruta','Timing','Shadow estado','Shadow salida','Shadow P&L EUR','Shadow R','MFE %','MAE %','LIVE estado','Entrada EUR','SL EUR','TP EUR','Salida EUR','LIVE P&L EUR','LIVE R','Sector','Tesis'],rows=[cols.join(';')];state.analyses.forEach(a=>{let s=a.shadow||{},op=liveForSetup(a);rows.push([a.id,a.episodeId||'',a.strategyVersion,a.signalDate,a.analysisDate,a.ticker,a.verdict,a.newsScore,a.route,a.routingReason,a.timingStatus,s.status,s.exit_reason,s.pnl_eur_net,s.r_multiple_net,s.mfe_pct,s.mae_pct,op?.status||'NO_EJECUTADA',op?.entryPrice,op?.initialSl||op?.sl,op?.tp1,op?.exitPrice,op?realized(op):'',op?rMult(op):'',a.sector,a.thesis].map(csvCell).join(';'))});download(`SIDI_Backup_Excel_V7_${today()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'))}
 function clearAll(){if(!confirm('¿Vaciar la base LIVE completa?'))return;if(!confirm('También se vaciará la copia maestra de Turso. ¿Continuar?'))return;state={settings:{...DEF},analyses:[],trades:[]};save();renderAll()}
 function switchView(v){document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.view===v));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));let target=$('view-'+v);if(!target)return;target.classList.add('active');if(v==='stats')ccRenderStats();if(v==='calendar')renderCalendar()}document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>switchView(x.dataset.view));$('registrySearch').oninput=renderRegistry;$('registryVerdict').onchange=renderRegistry;$('registryResult').onchange=renderRegistry;$('backupFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let j=JSON.parse(r.result);if(!j.analyses||!j.trades)throw new Error('Backup no reconocido');state=migrateState(j);save();renderAll();alert('Backup restaurado.')}catch(err){alert(err.message)}};r.readAsText(f);e.target.value=''};
 load();renderAll();syncControlCenter(false);
