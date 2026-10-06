@@ -1,55 +1,25 @@
 {
-  "date": "2026-09-28 10:09",
-  "sidi_strategy_version": "SIDI_SHADOW_V1",
-  "spy_price": 771.35,
-  "spy_ma20": 764.03,
-  "spy_ma50": 759.91,
-  "spy_ma200": 714.84,
-  "spy_rsi": 52.5,
-  "spy_return_20d": 0.2808,
+  "date": "2026-10-05 16:04",
+  "sidi_strategy_version": "SIDI_INTRADAY_V2",
+  "spy_price": 769.64,
+  "spy_ma20": 763.98,
+  "spy_ma50": 762.23,
+  "spy_ma200": 717.04,
+  "spy_rsi": 59.8,
+  "spy_return_20d": -0.2094,
   "sidi_spy20_gate": true,
-  "spy_vs200": 7.91,
-  "spy_dd52": -0.59,
-  "spy_ma200_slope": 1.366,
-  "spy_vol_ratio": 0.96,
-  "vix": 14.87,
+  "spy_vs200": 7.34,
+  "spy_dd52": -0.81,
+  "spy_ma200_slope": 1.339,
+  "spy_vol_ratio": 0.93,
+  "vix": 15.31,
   "market_regime": "ALCISTA FUERTE",
   "regime_color": "#22c55e",
   "regime_icon": "🟢",
-  "regime_desc": "ALCISTA FUERTE. Régimen descriptivo; SIDI_SHADOW_V1 usa SPY20 como puerta operativa.",
+  "regime_desc": "ALCISTA FUERTE. Régimen descriptivo; SIDI_INTRADAY_V2 usa SPY20 como puerta operativa.",
   "regime_score": 10,
-  "filter_rec": "SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
+  "filter_rec": "SIDI_INTRADAY_V2: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
   "history": [
-    {
-      "date": "2025-09-29",
-      "close": 656.6,
-      "ma200": 590.39,
-      "rsi": 70.7
-    },
-    {
-      "date": "2025-09-30",
-      "close": 659.07,
-      "ma200": 590.74,
-      "rsi": 71.2
-    },
-    {
-      "date": "2025-10-01",
-      "close": 661.32,
-      "ma200": 591.07,
-      "rsi": 68.5
-    },
-    {
-      "date": "2025-10-02",
-      "close": 662.08,
-      "ma200": 591.43,
-      "rsi": 69.7
-    },
-    {
-      "date": "2025-10-03",
-      "close": 662.07,
-      "ma200": 591.79,
-      "rsi": 66.2
-    },
     {
       "date": "2025-10-06",
       "close": 664.44,
@@ -232,7 +202,7 @@
     },
     {
       "date": "2025-11-17",
-      "close": 658.57,
+      "close": 658.56,
       "ma200": 604.55,
       "rsi": 32.1
     },
@@ -1519,6 +1489,36 @@
       "close": 771.35,
       "ma200": 714.84,
       "rsi": 52.5
+    },
+    {
+      "date": "2026-09-28",
+      "close": 765.61,
+      "ma200": 715.29,
+      "rsi": 51.2
+    },
+    {
+      "date": "2026-09-29",
+      "close": 764.2,
+      "ma200": 715.71,
+      "rsi": 53.1
+    },
+    {
+      "date": "2026-09-30",
+      "close": 762.63,
+      "ma200": 716.11,
+      "rsi": 55.8
+    },
+    {
+      "date": "2026-10-01",
+      "close": 763.99,
+      "ma200": 716.56,
+      "rsi": 51.5
+    },
+    {
+      "date": "2026-10-02",
+      "close": 769.64,
+      "ma200": 717.04,
+      "rsi": 59.8
     }
   ]
 }

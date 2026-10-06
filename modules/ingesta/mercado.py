@@ -1,6 +1,6 @@
 """Contexto de mercado para SIDI.
 
-Desde SIDI_SHADOW_V1 el régimen descriptivo NO modifica dinámicamente los
+Desde SIDI_INTRADAY_V2 el régimen descriptivo NO modifica dinámicamente los
 umbrales. La puerta de mercado operativa congelada es SPY20 <= +1% y el VIX
 queda como información, no como filtro.
 """
@@ -10,7 +10,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 
 HISTORY_DAYS = 250
-SIDI_STRATEGY_VERSION = "SIDI_SHADOW_V1"
+SIDI_STRATEGY_VERSION = "SIDI_INTRADAY_V2"
 SIDI_MAX_SPY20 = 1.0
 
 
@@ -69,9 +69,9 @@ def get_market_context() -> dict:
             regime, regime_color, regime_icon, regime_score = 'CORRECCIÓN', '#f97316', '🟠', 3
         else:
             regime, regime_color, regime_icon, regime_score = 'BAJISTA', '#ef4444', '🔴', 1
-        regime_desc = f'{regime}. Régimen descriptivo; SIDI_SHADOW_V1 usa SPY20 como puerta operativa.'
+        regime_desc = f'{regime}. Régimen descriptivo; SIDI_INTRADAY_V2 usa SPY20 como puerta operativa.'
         spy_gate = bool(np.isfinite(spy20) and spy20 <= SIDI_MAX_SPY20)
-        filter_rec = ('SIDI_SHADOW_V1: Fund≥6.5 · DD60≥12% · RSI<40 · '
+        filter_rec = ('SIDI_INTRADAY_V2: Fund≥6.5 · DD60≥12% · RSI<40 · '
                       'MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%')
         return {
             'date': datetime.today().strftime('%Y-%m-%d %H:%M'),
@@ -101,7 +101,7 @@ def _default_context() -> dict:
         'spy_dd52': 0, 'spy_ma200_slope': 0, 'spy_vol_ratio': 1, 'vix': None,
         'market_regime': 'DESCONOCIDO', 'regime_color': '#6670a0', 'regime_icon': '⚪',
         'regime_desc': 'No se pudo obtener el contexto de mercado.', 'regime_score': 5,
-        'filter_rec': 'SIDI_SHADOW_V1: contexto SPY20 no disponible', 'history': [],
+        'filter_rec': 'SIDI_INTRADAY_V2: contexto SPY20 no disponible', 'history': [],
     }
 
 

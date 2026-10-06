@@ -9,7 +9,7 @@
 ║     python main_ingesta.py --solo-earn  → solo earnings dates   ║
 ║                                                                    ║
 ║   OPTIMIZADO PARA MEMORIA (plan gratuito Render, límite 512MB): ║
-║   - El contexto SIDI_SHADOW_V1 (SPY20 + Abnormal20) se calcula  ║
+║   - El contexto SIDI_INTRADAY_V2 (SPY20 + Abnormal20) se calcula  ║
 ║     antes de liberar all_prices porque necesita las series       ║
 ║     históricas ya descargadas.                                  ║
 ║   - gc.collect() forzado entre pasos para recuperar memoria.    ║
@@ -31,6 +31,8 @@ from ingesta.earnings     import calcular_earnings
 from ingesta.mercado      import calcular_mercado
 from ingesta.exportar     import exportar_csv
 from config_loader        import cargar_config
+from shadow_tracker       import update_shadow_tracker
+from modules.shadow_intraday_v2 import update_intraday_shadow_tracker
 
 
 def _log_memoria(etiqueta: str):
@@ -91,10 +93,40 @@ def main():
         print("PASO 4/7 · Indicadores técnicos")
         df_tech = calcular_tecnicos(all_prices)
 
-        print("\n  ── Contexto SIDI_SHADOW_V1 ──")
+        print("\n  ── Contexto SIDI_INTRADAY_V2 ──")
         df_sidi_ctx = calcular_contexto_sidi(all_prices, sp500)
         if len(df_sidi_ctx) > 0:
             df_tech = df_tech.merge(df_sidi_ctx, on="ticker", how="left")
+
+        print("\n  ── Histórico automático SIDI_SHADOW_V1 ──")
+        try:
+            shadow_result = update_shadow_tracker(all_prices)
+            if shadow_result.get("ok"):
+                print(
+                    "  ✅ Shadow V1 histórico actualizado · "
+                    f"{shadow_result['signals']} señales · "
+                    f"{shadow_result['open']} abiertas · "
+                    f"{shadow_result['closed']} cerradas"
+                )
+            else:
+                print(f"  ⚠ Shadow no actualizado: {shadow_result.get('reason')}")
+        except Exception as e:
+            print(f"  ⚠ Shadow no actualizado: {e}", flush=True)
+
+        print("\n  ── Cartera contrafactual SIDI_INTRADAY_V2 ──")
+        try:
+            shadow_v2 = update_intraday_shadow_tracker()
+            if shadow_v2.get("ok"):
+                print(
+                    "  ✅ Shadow V2 actualizado · "
+                    f"{shadow_v2['tracked']} seguidas · "
+                    f"{shadow_v2['open']} abiertas · "
+                    f"{shadow_v2['closed']} cerradas"
+                )
+            else:
+                print(f"  ⚠ Shadow V2 no actualizado: {shadow_v2.get('reason')}")
+        except Exception as e:
+            print(f"  ⚠ Shadow V2 no actualizado: {e}", flush=True)
     else:
         df_tech = pd.DataFrame()
 

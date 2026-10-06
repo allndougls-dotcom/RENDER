@@ -173,6 +173,7 @@ def calcular_tecnicos(all_prices: dict) -> pd.DataFrame:
                 "day_high": round(float(h.iloc[-1]), 4),
                 "day_low": round(float(l.iloc[-1]), 4),
                 "day_close": round(float(c.iloc[-1]), 4),
+                "price_date": str(df.index[-1].date()),
                 "data_vintage": datetime.today().strftime("%Y-%m-%d"),
                 "rsi_14": round(rsi_n, 2),
                 "rsi_5d_ago": round(rsi_p, 2) if not np.isnan(rsi_p) else np.nan,
