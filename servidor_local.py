@@ -1573,6 +1573,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path == "/market": self.handle_market()
         elif path == "/hot": self.handle_hot()
         elif path in {"/mobile", "/stock-radar-v3.html"}: self.serve_app()
+        elif path == "/sw.js": self.serve_service_worker()
         elif path == "/api/latest-csv": self.handle_latest_csv()
         elif path == "/api/registro": self.handle_registro_get()
         elif path == "/api/sidi/control-center": self.handle_control_center_get()
@@ -1616,6 +1617,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "stock-radar-v3.html no encontrado"}, status=404); return
         self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8"); self.end_headers()
         with open(app_path, "rb") as f: self.wfile.write(f.read())
+
+    def serve_service_worker(self):
+        # Service Worker de la PWA: se sirve desde la raíz para que su alcance
+        # cubra toda la app, como application/javascript y sin caché HTTP
+        # para que el navegador detecte enseguida las versiones nuevas.
+        sw_path = BASE_DIR / "sw.js"
+        if not sw_path.exists():
+            self.send_error(404); return
+        body = sw_path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/javascript; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_root(self):
         _, rows = load_market_context()

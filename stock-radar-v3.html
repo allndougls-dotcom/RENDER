@@ -1465,6 +1465,20 @@ html[data-layout="desktop"] #scannerCards { display: none; }
 }
 
 </style>
+<script>
+// PWA: registra el Service Worker mínimo (/sw.js) para que Chrome en Android
+// ofrezca "Instalar aplicación". Si el navegador no lo soporta, o la app se
+// abre como archivo local, la app funciona igual sin él.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(reg => console.log('Service Worker registrado:', reg.scope))
+      .catch(err => console.warn('No se pudo registrar el Service Worker:', err.message));
+  });
+} else {
+  console.info('Este navegador no soporta Service Workers; la app no será instalable como PWA.');
+}
+</script>
 </head>
 <body>
 
