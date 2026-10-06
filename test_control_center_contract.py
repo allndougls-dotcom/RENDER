@@ -78,3 +78,14 @@ def test_update_button_dispatches_github_without_exposing_a_secret():
     assert "INGESTA_TOKEN_KEY = 'sidiUpdateToken'" in html
     assert "const INGESTA_TOKEN = 'stock-radar-2026'" not in html
     assert "Lanza el workflow de ingesta en GitHub Actions" in html
+
+
+def test_control_center_waits_for_render_and_keeps_turso_authoritative():
+    html = _html()
+    assert "CC_READ_TIMEOUT_MS=30000" in html
+    assert "CC_WRITE_TIMEOUT_MS=30000" in html
+    assert "async function ccFetch(" in html
+    assert "Render está despertando · reintentando conexión con Turso" in html
+    assert "state=migrateState(remote.state)" in html
+    assert "localTs=state.updatedAt" not in html
+    assert "Turso tarda en responder · la base maestra no se ha sustituido" in html
