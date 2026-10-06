@@ -1558,6 +1558,12 @@ def get_price_history(ticker, rango="6mo"):
     return data
 
 
+PWA_FILES = {
+    "/sw.js": "application/javascript; charset=utf-8",
+    "/manifest.json": "application/manifest+json; charset=utf-8",
+}
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
@@ -1573,6 +1579,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path == "/market": self.handle_market()
         elif path == "/hot": self.handle_hot()
         elif path in {"/mobile", "/stock-radar-v3.html"}: self.serve_app()
+        elif path in PWA_FILES: self.serve_pwa_file(path)
         elif path == "/api/latest-csv": self.handle_latest_csv()
         elif path == "/api/registro": self.handle_registro_get()
         elif path == "/api/sidi/control-center": self.handle_control_center_get()
@@ -1616,6 +1623,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "stock-radar-v3.html no encontrado"}, status=404); return
         self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8"); self.end_headers()
         with open(app_path, "rb") as f: self.wfile.write(f.read())
+
+    def serve_pwa_file(self, path):
+        # Service Worker y manifest de la PWA: desde la raíz (el alcance del
+        # Service Worker cubre así toda la app), con su Content-Type exacto y
+        # sin caché HTTP para que el navegador detecte enseguida los cambios.
+        # Los iconos (/icons/*.png) los sirve el manejador estático normal.
+        file_path = BASE_DIR / path.lstrip("/")
+        if not file_path.exists():
+            self.send_error(404); return
+        body = file_path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", PWA_FILES[path])
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_root(self):
         _, rows = load_market_context()

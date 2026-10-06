@@ -3,7 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+// Modo de diseño (móvil / escritorio) decidido antes del primer pintado
+// para que no parpadee. Automático por ancho de pantalla, salvo que el
+// usuario haya elegido uno a mano (ver setLayoutPref más abajo).
+(function () {
+  var pref = 'auto';
+  try { pref = localStorage.getItem('layoutPref') || 'auto'; } catch (e) {}
+  var vp = document.querySelector('meta[name=viewport]');
+  if (vp) vp.setAttribute('data-orig', vp.getAttribute('content'));
+  var small = Math.min(window.innerWidth || 9999, screen.width || 9999) <= 860;
+  if (pref === 'desktop' && small && vp) vp.setAttribute('content', 'width=1280');
+  document.documentElement.setAttribute('data-layout',
+    pref === 'mobile' || pref === 'desktop' ? pref : (window.innerWidth <= 860 ? 'mobile' : 'desktop'));
+})();
+</script>
 <title>STOCK-RADAR · Sistema de Análisis S&P500</title>
+<!-- PWA: manifest + iconos para "Instalar aplicación" en Chrome/Android (y pantalla de inicio en iOS) -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#07090f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="STOCK-RADAR">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABmJLR0QA/wD/AP+gvaeTAAAQ+klEQVR4nMWbeXTV1bXHP+d355s7ZE4gA4GEIIOEGcQBBIQUFLBqWltoq6uv1rJa17MKFTvQtWrVvmpf2/dsq6+6StunryqvWhRQlDIYQBMCCUMYAplDEjLcIXf6Def9gWL7DOTeDPD9697f3Xuffb6/faa9zxVcRfzl2RscXi20UkrWAMuAqo9/mg7sEII/+czON8se3h++Wj6JkW5g0yaUufaS+YrgHon8MoiwgC3W1Bl70/Knfu7w1r1T7G5+4/aeLRCwBikzELwhpHzVN27C22Vlr+oj6d+IEfDu0zMmahhfALlWQBrwpuLK2VY4/1+z7J7U2z2pOQs6T71jfm3jkzQe1Rk9qSCQWZj7gSu34+UUR9NMCV8SkiiC14UQLy1df/jwSPg5rARsf3ZyqtAsdxtSfkXAPKTcpVjdrxfMe8hwZ0+4zZWcsdxstTs/kW87tpXXNj5JwxH1kg2L3ULO1KLOtIKsnVk5Z943m3uWSliF5AyCzbrQ/rBi/bHzw+XzkAnYtanAHrN7bkOItRJWI0S1oYiXc0oe6MwonHNzkif9Tqvdldafbn8E/CMcXqfMKSluTM3zbk9PqzlsskbuQohbkXIX8EdbRN9y66ZjwaH4PygCPhnXCNYKyRcR+JC87C1eVZ13/e3THc6UMqc3LW8gOwMRAFC4wEN3l4bhs+qTS5MCNkv635yOupOKIr8qIBfYipR/tEZSt9266e9aon0xJyL89s+nTxK6LBPIrwApwN9smSXrC298MN/uTC1zJaetF0JJ1IcrIjnPwrh5Hqr2NZvGjrcmC9G+tqbCYvQFs87mFuc+5zLttwohfh+z98R2PF3yuhTyD6Xrqw/Fa39AAnb+9Lo03Wy/y5DyK0I3ZgHvKvac/yha+LDdlTJqdZI3Y41iMo/IZCrscKHVR2a+hoyYMSsmVE3DMLkVqzerKNjHd2urnOrk2emNZnPfq1ZbV46QYt/2p0rOIdiMZt5c+nhl25XaGJAAzWSrlNLoREn6S8HCR15LTi9enpSc/pTZYrMMX1f7h4xAS4VGU20PowqdBMNRTApMntJHW1MV7kwPublWSyzYVlhR0fs9U+/44Oix2TszRtcdMtt77xZm7UGg4EptxDEEpJAx8fjs+176sys5M314uhY/rC6F/BudBLvMHNzpZ/GqLKRhMKbIgtRVTDYnJzpUfOdNRI+fdrUdOn2HO9Oz4pZ7xeeEVb4wkP24B6zJarUOrSuDQ6jVQI1Irp9twmSzUN/YSyCkEosaRFWNtvZeAh1hZM+no1DTtLiH5PDOWCMAi1eQmilJctnpPqsRixk0tQVpaO2jsS2CqmmYzTEkKrm3TMTiTkrIfkKrwLWAHpKoQajcGcLmVCnI99LeEuPAWwEcmQaFJTZKpqdgtwbwFI6jp9GH4e+N2/5VI0ANXaCl6jdosT7MliQKbvpBXHqGCrV/jzBuAUy5MRWL2YxfDTB9UQYHXu7kuC+CJW0qJlclgQtWFE1iJODXVRsCFmc6aYUrCHfVoqmB+BUFOPOhoyGMpmkoQqDGJKMLDFauH01OXjI1W05T/ttuandUE2i+4qr3GVzVIRDxN+DNvwVDj8atY8nXmDQ7mXHjXEhA0yXH9qm4bH3k58OoYujWmrDUC3y1dQn7NKIE6GoIacQQJhtquAtfy34KFzyBFo0zAgSkjzWRl++g87zB0f1+8icr5I63Y7WaMJvNHNnZQ3etDlaJGMTOfkQJaP7oF/haD5I6dikRfxM5M9YhFAsWR2p8BiTYvQpWi5ma8iCGkkbDaSeB9gYKi00IAdnjrPSFw0z7/F1UPv82el8kIR+vyhAI99aRnHcLDu+YhHW7jktqxyQzcX4E1TOVhg8j9J46yeHkKH0zHExbMpbCW7w0NgkMLfHcybASoMf8tB3dTGr+Epzp1116roV7yBi/alA2/aehqzCTky3N5E630LhrF0JT6CoHJZxGw9EYjhSduje3IHSZsP1hI0ANXaBuz+Po0QC9jXtIHbMEQ794zE3KmAJDOCWe2b4bgN6aN//peWdV7aXPgz2NDXkZ1NUQoa7TnCv/CSljFqOrQQQKjtRC+jprADBZHP3qRvzncXhGPC15RQw5Ao698UUAcmeuQzFfynaRMmYxvuZy/G0fXXompUFP8xFqK96k8dwZ9h9uIBqJMr7UgjUC/rOS3mYDaSQeyoPFkAjwt1Vc+mxxpKOroX/6XQgFJAR6Otj1yvdpaz7LvqoW9lZ3E4p+2sl3CWOzCK7PsTBtkQ2PohCs0+mqNzBGNCc8RAJiwZZ+n0spaTnxLserKmls7WXvse1UnAqhapd/s1FVUlEfo6I+hsUsKBljZfoiK26hEGqUXDijo19Bf7AYEgHp41fReuT3n3keDIT55Q+/z+6aEPogwlnVJBV1USrqopgUwS2TbEwostBeO/zhMOQ5YPLqVwBQTHZAMnnUKzQdfZfG328aVOf/P3RD0tSlM8E5MumIIRNg+oeJ75PvwjRQtkyQnO/m9uk2HJqBsArCnSF2lIfoSOQoNwy4JgkRe0EKP17rpHP3BV54q4v/2hll9PU2vNdgRbwmBBRPc5NrM1NcbCffJZCBIP+52UfdCM/4/eEaZIQEvV0qUZOdRatHcesqSW9LH69s6eSdvqvvTRwECGkoiPIXH3CZlPgGaEy90olM0ri3jW/XO5lT7GDapCRm5rj44rwA7/81zOVKO1OXpmBZbourfd0Q0qBbKIgBZ+F4IiBisUrr7s3d+Np8cTmQNfHyZpVkF18rUfnD7j62NfWx/WCMH2xIw96pXjGVdd2SdYy5fnlc7Yf83e0fbb7TDiI0kGw8BPQhhdNst+vgi2vOkDGJ3dr/jKak2pg934tN83MkIMib4iH9ZDe/rNAuS4DDpuBISo6naQAMQw9JRTiRDDioBiRACnqRpFhdzhgQVzVIDUu8qf1zpZ3tYt2zJrJTzHht0Ly1lVf9xhXfflZaEo6kfgvM/cMwupFKipDGgOnhAd+oMKgHCpzJ7m4AQwjSJxd/Rk4mGZhSL3Yj2idJS7q8aSOq03o+yomGKI0DdB4gO82JxRl/BGharAHBWATnBpIdMAKEEGcNmOZwu1ok5E39xp0kp/up8tXS13yxk0XLzRTPyMKdFKP2eIDqV8PkZQzfzm18fip2d2bc8pqh1gspx0moGEg2njF9TCCnOZOdBwsWzCPJfoZoSzl9HRdVC5cvJNYnCXcHsVlMTJ7iJm26IDvbjhiGjY0QkJmVTSIpj4iv67CEaYrk6ECyAxOgGOVAoXB1b2uuqkaLhBmVb2Pxt0ZhzTCRVpSKLWcBDeddaLqOxWwC1Ux2hpmpBUOPgpnFLiZMXxy3vK6psqXyjVMCxuqG6cBA8gMSsOzR6g4QZzO8J5NSRqVEghfGcPCDbuz2CMvWZZHmPUCK7UPmzIqgqzqhiIbNYWH7nztZUNh/JigRfH5REflTSuOWjwS6j0a6PxgLnFq+sapzIPn4tsKSrSBXjioaW1n7+k58bSaCUQspyQ4yPAbXTXZjtVpxOO1U7vEjFEHhDDdKn2RK3uCjYFaxh5K5n0Moprh1opHAW1KwEtgaj3xcBBiK+F+BuMOdZf+dIiDWKWhrDtPV1UNMU9EMSTSm03Y+iKoLJs+1IxRo2KOxYqITpy3xycBhU/ja6hKum/+luHUMXZPtjYe2CViBkG/EoxMXAcGCon1AKD2tPJxzQ17Q6TEw6VH6QjGa2qOcbfZzutFHb69KqEPi9dhwuCUmp6Rpr8b9N3kwJXDsMimw4csTWFj2IxKZ/II97R+0f/TcaJB+f8GE8nh04nKrrOxVHcELEvGtcTNdNePmWJl1QwpqRKPuUJDjOyNkJrkYW+DAiKkc2hXGaggwIOwz8Ffq/MtCD+Y4Itlsgg1rJrDy/p/i8GTH494l9HQ3vSSEWCfht/HeMI3/vajmF4D5HlPrepfLapztKubovjBtH0rGT0/lvC+I1WplzgoPjswox96PoIcvvr1Ah0Go0uA7i7wkuy7fZIpL4cdfn8I9D/wMb+b4uF0DCPZ2nKjfuek0MEtR+Gye7jKIe3b50/ttwTVLs7OFYtweuDDn3dMfds1xJ4W4+d50RucLen0RMtOTCIVVag74UOySaMen4RsLSfqaJAvmOEhJNXG2Q0N+fFYzKYK7F4xi3ZqFlH7tGRyerPh7zsUkbHfT8Ue66rZ/W0reLt1QvSVe3cTyAar5CczambTcg8+0+szfmDDRavW4VepOB6l6L8bEIklGhoPVXx5N3dkgB7p96C2fNqFGJOfeU8nOMfHQQg91fg1bkoObZk9kbukDpOdPi8sNXQvja9yLRKLHgjjS5/391HuPtoIy36LraxPpUvzrCx9HwW3ZJgUesygzHzr+wbm7i6cloWkGURRMisrR/SHcqXaysi20tYfoa/rsJBYJSHrPGEzIs3LPg/cxd9X3cXrjH++KYiHcU0fLoefwdxylW/d8IdpS8Tshxa+XbqzZkUifEk6J+cPa00j0tPSKieNmFFUA6LpBqFWnttJD74UkqvaEMJkVUkZdmd9on8ThzkjUBQC8ufMw29MxNCPor/jNSoHQ0lLMzyRqJ2ECyjYdiyG4T0GuT884+8jpWj167EiQzhMR3DlTmV42n+tvtFLXZKO1ZuSSfM2Vz+HOve2grkZ/IRAPC5T7Zz1QeflLx5fBoJKipRuOfCjhB4pU/hRVzSvE+TEhJaZQ/95+uhqtHNgVo6t5EoGTw5fm7W3ay7l9m2g9/Dw9De8Ri2rdLTW7vx72Re5H8PjSDVUDnvz6w6CzwsvWH3kWycHcTP8TY28svNObk6arPT6qnt9Cz0cBal/bNljT/SIWbCVw/hDBzhrajr0WC2qOOyL+Ey8hKF/66JF/H6zdQRMgBNJvda4FSE85+ODU5XPKvKPS9Etr2zAg7KtHj/3zfaKw/7yhac7v+E9ufUwgYj6L86tCMOhGh1QXKHt4f1iY5EpgfLJ3z5cmr5hxb0puesJ39vtDV93b1O/bxMl31tFTvxMATTUw1GhvT9OhUgFjVJN51VD/YDXkwsiyR6s7zJq+GJiYmlq+trh0yrJR1+UNyakLp/6Kr7kcNdyNFunF317B+ZNvx4QQCGGYgSJdVxbf8UjlhaH6PyyVoSWPH203DGWhkDI9M+WjJycttd4w/uap9Ynaaa1+kZPbH8DX+iGjZ3wTACnBmjp/px7r2frx3xIUsx5dGM9ZPx4MW2ls+caqTr8laTGSpiTr+bcmzK1bO231zVutSfEVM6Q06G14j2iwDXfWVIRQMAxJLKpxZu+PX1TDsdsAFJM4s2Rjbddw+T2stcGyh/eHl204co8U/FoRvJNXVLV39ppFK/Nnje8ZSLfjxP8glE+SJ4JAV2uVYUhsdjMixouKSZRf/EUMa/142IujQiBLNxx5GmmUIuQ3Uz27H5t8a9ONM7+w+HlXmvuyzmdNuhezPRldM+isr3jn5K4f/dBsvuiesHCfzW7ZN9y+wghWh5d9r2aPLaxNRSiHzZgOjc4/0DOrbObCKaVzD9nc9s8sW9FIX9DkLN6h4XnS31rVrofCr0X7YnuEziPJ9rRtSGOHgIcMKf5tOP28KhX57U+XzAF+DeQDP2/vnFke7tCeCXUfmbdiw7di7pzZf6yvfudXgdr/XiaF+K6AeoHy7cHu7hLBVbuSsGkTylzntLuElI+BzEeIX/l6iw6m5LmC0l+1RCK+A9Qj5E+XPVq9ZSibm0RwTW4pbv/Z1FKk2Ah8nAAQVQjjydL11duvhT/XDNueKrlp21MlN11LH/4PJkcK/9rNUGkAAAAASUVORK5CYII=">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1348,6 +1371,24 @@ body::before {
   margin: 14px 0 6px;
 }
 .mobile-menu-panel .mm-title:first-child { margin-top: 0; }
+/* Tarjetas del Scanner (versión móvil) */
+.sc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 11px; color: var(--text2); }
+.sc-toolbar label { display: flex; align-items: center; gap: 6px; }
+.sc-toolbar select { margin-left: auto; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px; }
+.sc-list { display: flex; flex-direction: column; gap: 8px; }
+.sc-card { display: grid; grid-template-columns: 22px 1fr auto; gap: 3px 10px; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+.sc-card.is-full { box-shadow: inset 3px 0 0 var(--green); }
+.sc-check { grid-row: 1 / span 3; align-self: start; padding-top: 4px; }
+.sc-check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.sc-top { display: flex; align-items: center; font-weight: 600; color: #fff; font-size: 14px; min-width: 0; }
+.sc-right { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.sc-name { grid-column: 2 / span 2; font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-metrics { grid-column: 2 / span 2; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 11px; color: var(--text2); }
+.sc-empty { text-align: center; padding: 32px; color: var(--text3); }
+
+/* En el teléfono con "versión escritorio" forzada: botón para volver */
+#layoutBackToMobile { display: none; position: fixed; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 9000; background: var(--bg2); color: var(--text); border: 1px solid var(--border2); border-radius: 999px; padding: 10px 16px; font-family: 'DM Mono', monospace; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
+
 .mm-tab {
   display: block;
   width: 100%;
@@ -1366,46 +1407,65 @@ body::before {
 .mm-tab.cc-mm-tab.active { color: #c084fc; }
 .mm-close-row { display: flex; justify-content: flex-end; margin-bottom: 4px; }
 
-@media (max-width: 860px) {
-  .header { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
-  .logo { font-size: 15px; }
-  .header-right { gap: 6px; flex-wrap: wrap; }
-  .header-right .status-pill, #dataStatusDetail { display: none !important; }
-  .cc-nav-btn { font-size: 9px; padding: 6px 10px; }
-  .btn { font-size: 10px; padding: 7px 10px; }
+/* ══ VERSIÓN MÓVIL ══
+   Todo lo de aquí solo aplica con html[data-layout="mobile"], que decide
+   el script del <head> (automático por ancho o elegido a mano en el menú ☰).
+   Así el móvil tiene su propio diseño y "ver versión escritorio" funciona
+   de verdad en el teléfono. */
+html[data-layout="mobile"] .header { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+html[data-layout="mobile"] .logo { font-size: 15px; }
+html[data-layout="mobile"] .header-right { gap: 6px; flex-wrap: wrap; }
+html[data-layout="mobile"] .header-right .status-pill, html[data-layout="mobile"] #dataStatusDetail { display: none !important; }
+html[data-layout="mobile"] .cc-nav-btn { font-size: 9px; padding: 6px 10px; }
+html[data-layout="mobile"] .btn { font-size: 10px; padding: 7px 10px; }
 
-  .nav, #mainNav, #ccExternalNav { display: none !important; }
-  .hamburger-btn { display: inline-block; order: 99; }
+html[data-layout="mobile"] .nav, html[data-layout="mobile"] #mainNav, html[data-layout="mobile"] #ccExternalNav { display: none !important; }
+html[data-layout="mobile"] .hamburger-btn { display: inline-block; order: 99; }
 
-  .market-banner { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 14px; }
-  .market-detail { gap: 8px; }
-  #marketDesc { text-align: left !important; max-width: 100% !important; }
+html[data-layout="mobile"] .market-banner { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 14px; }
+html[data-layout="mobile"] .market-detail { gap: 8px; }
+html[data-layout="mobile"] #marketDesc { text-align: left !important; max-width: 100% !important; }
 
-  .main { padding: 12px !important; }
+html[data-layout="mobile"] .main { padding: 12px !important; }
 
-  .filters-row { flex-direction: column; align-items: stretch !important; }
-  .filters-row .filter-group { width: 100%; }
+html[data-layout="mobile"] .filters-row { flex-direction: column; align-items: stretch !important; }
+html[data-layout="mobile"] .filters-row .filter-group { width: 100%; }
 
-  table { font-size: 11px; }
-  .table-wrap, .tablewrap { overflow-x: auto; }
+html[data-layout="mobile"] table { font-size: 11px; }
+html[data-layout="mobile"] .table-wrap, html[data-layout="mobile"] .tablewrap { overflow-x: auto; }
 
-  .cc-scope .cards { grid-template-columns: repeat(2, 1fr) !important; }
-  .cc-scope .two, .cc-scope .three { grid-template-columns: 1fr !important; }
-  .cc-scope .app { padding: 10px !important; }
-  .cc-scope header { flex-direction: column !important; align-items: flex-start !important; }
-  .cc-scope .actions { justify-content: flex-start !important; margin-top: 8px; }
+html[data-layout="mobile"] .cc-scope .cards { grid-template-columns: repeat(2, 1fr) !important; }
+html[data-layout="mobile"] .cc-scope .two, html[data-layout="mobile"] .cc-scope .three { grid-template-columns: 1fr !important; }
+html[data-layout="mobile"] .cc-scope .app { padding: 10px !important; }
+html[data-layout="mobile"] .cc-scope header { flex-direction: column !important; align-items: flex-start !important; }
+html[data-layout="mobile"] .cc-scope .actions { justify-content: flex-start !important; margin-top: 8px; }
 
-  .cc-ticker-dialog { width: 100vw !important; height: 100vh !important; }
-  .cc-ticker-dialog .modalbox { padding: 16px !important; }
+html[data-layout="mobile"] .cc-ticker-dialog { width: 100vw !important; height: 100vh !important; }
+html[data-layout="mobile"] .cc-ticker-dialog .modalbox { padding: 16px !important; }
 
-  /* AI Preparator: el grid de 280px+1fr no cabe en móvil */
-  #aiPreparatorGrid { grid-template-columns: 1fr !important; }
-  #aiOutputTabsRow { flex-wrap: wrap; }
-  #aiOutputTabsRow button { flex: 1 1 auto; font-size: 9px !important; padding: 6px 8px !important; white-space: nowrap; }
-  .ai-output { min-height: 320px !important; padding: 12px !important; }
-  .ai-output textarea { min-height: 260px !important; font-size: 10px !important; }
-  .company-check-list { max-height: 220px !important; }
-}
+/* AI Preparator: el grid de 280px+1fr no cabe en móvil */
+html[data-layout="mobile"] #aiPreparatorGrid { grid-template-columns: 1fr !important; }
+html[data-layout="mobile"] #aiOutputTabsRow { flex-wrap: wrap; }
+html[data-layout="mobile"] #aiOutputTabsRow button { flex: 1 1 auto; font-size: 9px !important; padding: 6px 8px !important; white-space: nowrap; }
+html[data-layout="mobile"] .ai-output { min-height: 320px !important; padding: 12px !important; }
+html[data-layout="mobile"] .ai-output textarea { min-height: 260px !important; font-size: 10px !important; }
+html[data-layout="mobile"] .company-check-list { max-height: 220px !important; }
+
+/* Cabecera compacta: las acciones de datos pasan al menú ☰ */
+html[data-layout="mobile"] .header { flex-wrap: nowrap; padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px; }
+html[data-layout="mobile"] .header-right .btn { display: none !important; }
+html[data-layout="mobile"] .logo { font-size: 14px; gap: 8px; white-space: nowrap; }
+html[data-layout="mobile"] .logo img { width: 26px !important; height: 26px !important; }
+html[data-layout="mobile"] .cc-nav-btn { margin-left: auto; }
+
+/* Panel de mercado: velocímetro arriba, gráfico SPY a todo el ancho debajo */
+html[data-layout="mobile"] #marketDetailPanel { padding: 14px 12px !important; }
+html[data-layout="mobile"] #marketPanelGrid { grid-template-columns: 1fr !important; gap: 16px !important; }
+html[data-layout="mobile"] #marketGaugeSVG { max-width: 240px !important; }
+
+/* Scanner: tarjetas en móvil, tabla en escritorio */
+html[data-layout="mobile"] #scannerTableWrap { display: none; }
+html[data-layout="desktop"] #scannerCards { display: none; }
 
 @media (max-width: 480px) {
   .cc-scope .cards { grid-template-columns: 1fr !important; }
@@ -1413,6 +1473,20 @@ body::before {
 }
 
 </style>
+<script>
+// PWA: registra el Service Worker mínimo (/sw.js) para que Chrome en Android
+// ofrezca "Instalar aplicación". Si el navegador no lo soporta, o la app se
+// abre como archivo local, la app funciona igual sin él.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(reg => console.log('Service Worker registrado:', reg.scope))
+      .catch(err => console.warn('No se pudo registrar el Service Worker:', err.message));
+  });
+} else {
+  console.info('Este navegador no soporta Service Workers; la app no será instalable como PWA.');
+}
+</script>
 </head>
 <body>
 
@@ -1473,7 +1547,16 @@ body::before {
     <div class="mm-title">&nbsp;</div>
     <button class="mm-tab" style="color:var(--accent)" onclick="mmGoTo('scanner')">⚔ Volver a STOCK-RADAR</button>
   </div>
+
+  <div class="mm-title">Datos</div>
+  <button class="mm-tab" onclick="toggleMobileMenu(false);triggerIngesta()">⟳ Actualizar datos</button>
+  <button class="mm-tab" onclick="toggleMobileMenu(false);cargarUltimoCSV()">📥 Cargar datos</button>
+  <button class="mm-tab" onclick="toggleMobileMenu(false);document.getElementById('csvInput').click()">↑ Cargar CSV</button>
+  <button class="mm-tab" onclick="toggleMobileMenu(false);exportExcel()">↓ Descargar Excel</button>
+  <div class="mm-title">Vista</div>
+  <button class="mm-tab" onclick="toggleMobileMenu(false);setLayoutPref('desktop')">🖥 Ver versión escritorio</button>
 </div>
+<button id="layoutBackToMobile" onclick="setLayoutPref('auto')">📱 Versión móvil</button>
 
 <div class="market-banner" id="marketBanner" style="background:rgba(34,197,94,0.04)">
   <div class="market-regime" id="marketRegime">
@@ -1491,7 +1574,7 @@ body::before {
 
 <div id="marketDetailPanel" style="display:block;background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 28px">
   <div style="display:flex;justify-content:center">
-  <div style="display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:start;max-width:1100px;width:100%">
+  <div id="marketPanelGrid" style="display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:start;max-width:1100px;width:100%">
 
     <!-- Velocímetro del régimen de mercado -->
     <div style="text-align:center">
@@ -1578,7 +1661,8 @@ body::before {
     </div>
   </div>
 
-  <div class="table-wrap">
+  <div id="scannerCards"></div>
+  <div class="table-wrap" id="scannerTableWrap">
     <div class="table-scroll">
       <table id="mainTable">
         <thead>
@@ -2194,15 +2278,22 @@ function renderStats() {
   `;
 }
 
+// Badge de setup de una empresa (tabla de escritorio y tarjetas de móvil)
+function scannerSetupBadge(d) {
+  const isFull = d.fullSetup === true;
+  const isHot = d.setupHot === true;
+  const isWatch = !isHot && d.drawdown60 >= 12 && d.score >= 6.5;
+  return isFull ? '<span class="setup-badge setup-hot" title="SIDI_INTRADAY_V2: episodio único, revisiones diarias y seguimiento Shadow">FULL V2</span>' : isHot ? '<span class="setup-badge setup-watch">HOT TÉCNICO</span>' : isWatch ? '<span class="setup-badge setup-watch">WATCH</span>' : '<span class="setup-badge setup-none">—</span>';
+}
+
 function renderTable() {
+  if (isMobileLayout()) { renderScannerCards(); return; }
+  document.getElementById('scannerCards').innerHTML = '';
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '';
   filteredData.forEach(d => {
     const scoreCls = d.score >= 7.5 ? 'score-high' : d.score >= 6 ? 'score-mid' : 'score-low';
-    const isFull = d.fullSetup === true;
-    const isHot = d.setupHot === true;
-    const isWatch = !isHot && d.drawdown60 >= 12 && d.score >= 6.5;
-    const setupLabel = isFull ? '<span class="setup-badge setup-hot" title="SIDI_INTRADAY_V2: episodio único, revisiones diarias y seguimiento Shadow">FULL V2</span>' : isHot ? '<span class="setup-badge setup-watch">HOT TÉCNICO</span>' : isWatch ? '<span class="setup-badge setup-watch">WATCH</span>' : '<span class="setup-badge setup-none">—</span>';
+    const setupLabel = scannerSetupBadge(d);
     const wCount = d.warningCount || 0;
     const warnStr = Array.isArray(d.warnings) ? d.warnings.join('; ') : String(d.warnings ?? '');
     const warnTitle = (warnStr && warnStr !== 'OK') ? warnStr.replace(/"/g, '&quot;') : '';
@@ -2304,12 +2395,74 @@ function toggleSelectAllScanner(checkbox) {
 }
 
 function updateScannerSelectAllState() {
-  const selectAll = document.getElementById('scannerSelectAll');
-  if (!selectAll) return;
   const rowChecks = document.querySelectorAll('.scanner-row-check');
   const visibleTickers = [...rowChecks].map(rc => rc.value);
   const allSelected = visibleTickers.length > 0 && visibleTickers.every(t => scannerSeleccionadas.has(t));
-  selectAll.checked = allSelected;
+  ['scannerSelectAll', 'scannerSelectAllMobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = allSelected;
+  });
+}
+
+// ── Scanner en tarjetas (versión móvil) ──
+// Mismos datos, filtros, selección y ficha que la tabla de escritorio,
+// pero una tarjeta por empresa con lo que importa para decidir de un vistazo.
+// sortDir = 1 ordena de mayor a menor; -1 de menor a mayor (ver updateFilters).
+const SCANNER_MOBILE_SORTS = [
+  ['score:1', 'Score ↓'], ['score:-1', 'Score ↑'], ['drawdown60:1', 'Drawdown ↓'],
+  ['rsi:-1', 'RSI ↑'], ['earningsDays:-1', 'Earnings ↑'], ['fcfYield:1', 'FCF Yield ↓'],
+];
+
+function setScannerSort(value) {
+  const [col, dir] = value.split(':');
+  sortCol = col; sortDir = parseInt(dir, 10);
+  updateFilters();
+}
+
+function renderScannerCards() {
+  const wrap = document.getElementById('scannerCards');
+  document.getElementById('tableBody').innerHTML = ''; // sin filas ocultas que confundan la selección
+  const actual = `${sortCol}:${sortDir}`;
+  const opciones = SCANNER_MOBILE_SORTS.some(([v]) => v === actual) ? SCANNER_MOBILE_SORTS : [[actual, 'Orden actual'], ...SCANNER_MOBILE_SORTS];
+  const toolbar = `<div class="sc-toolbar">
+      <label><input type="checkbox" id="scannerSelectAllMobile" onchange="toggleSelectAllScanner(this)" style="accent-color:var(--accent);width:16px;height:16px">Todas</label>
+      <span>${filteredData.length} empresas</span>
+      <select onchange="setScannerSort(this.value)" aria-label="Ordenar">${opciones.map(([v, l]) => `<option value="${v}" ${v === actual ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    </div>`;
+
+  if (!filteredData.length) {
+    wrap.innerHTML = toolbar + '<div class="sc-empty">Ninguna empresa cumple los filtros actuales</div>';
+  } else {
+    const cards = filteredData.map(d => {
+      const scoreCls = d.score >= 7.5 ? 'score-high' : d.score >= 6 ? 'score-mid' : 'score-low';
+      const wCount = d.warningCount || 0;
+      const e = d.earningsDays;
+      const earnOk = Number.isFinite(e) && e !== 999;
+      const earnColor = earnOk && e >= 0 && e <= 7 ? 'var(--red)' : earnOk && e >= 0 && e <= 14 ? 'var(--amber)' : 'var(--text2)';
+      return `<div class="sc-card${d.fullSetup === true ? ' is-full' : ''}" data-ticker="${d.ticker}">
+        <div class="sc-check"><input type="checkbox" class="scanner-row-check" value="${d.ticker}" ${scannerSeleccionadas.has(d.ticker) ? 'checked' : ''} onchange="toggleScannerSelect(this)"></div>
+        <div class="sc-top">${logoImg(d.ticker, 20)}${d.ticker}</div>
+        <div class="sc-right">${scannerSetupBadge(d)}<span class="score-badge ${scoreCls}">${d.score.toFixed(1)}</span></div>
+        <div class="sc-name">${d.name} · ${d.sector}</div>
+        <div class="sc-metrics">
+          <span>DD <b style="color:var(--red)">-${d.drawdown60.toFixed(1)}%</b></span>
+          <span>RSI <b style="color:${d.rsi < 30 ? 'var(--red)' : d.rsi < 40 ? 'var(--amber)' : 'var(--text)'}">${d.rsi}</b></span>
+          <span>Earn <b style="color:${earnColor}">${earnOk ? (e <= 0 ? `<${Math.abs(e)}d` : e + 'd') : '—'}</b></span>
+          <span>${wCount > 0 ? `<b style="color:var(--amber)">⚠ ${wCount}</b>` : '<b style="color:var(--text3)">✓</b>'}</span>
+        </div>
+      </div>`;
+    }).join('');
+    wrap.innerHTML = toolbar + `<div class="sc-list">${cards}</div>`;
+    wrap.querySelectorAll('.sc-card').forEach(el => {
+      el.onclick = ev => {
+        if (ev.target.closest('.sc-check')) return;
+        const d = allData.find(x => x.ticker === el.dataset.ticker);
+        if (d) openModal(d);
+      };
+    });
+  }
+  updateScannerSelectAllState();
+  updateScannerPrepararBar();
 }
 
 function updateScannerPrepararBar() {
@@ -3036,6 +3189,55 @@ function ccSwitchViewExternal(view, btnEl) {
 // deslizante y decide qué sub-menú mostrar (app principal o CC)
 // según el modo actual.
 // ══════════════════════════════════════════════════════════════
+// ── Modo móvil / escritorio ──
+// data-layout en <html> (lo fija primero el script del <head>) activa el
+// CSS de cada versión; aquí se recalcula al girar/redimensionar y cuando
+// el usuario elige una versión a mano desde el menú ☰.
+const LAYOUT_BREAKPOINT = 860;
+
+function getLayoutPref() {
+  try { return localStorage.getItem('layoutPref') || 'auto'; } catch (e) { return 'auto'; }
+}
+
+function isMobileLayout() {
+  return document.documentElement.getAttribute('data-layout') === 'mobile';
+}
+
+function pantallaPequena() {
+  return (screen.width || 9999) <= LAYOUT_BREAKPOINT;
+}
+
+function setLayoutPref(pref) {
+  try { localStorage.setItem('layoutPref', pref); } catch (e) {}
+  const vp = document.querySelector('meta[name=viewport]');
+  // En el teléfono, "versión escritorio" = lienzo de 1280px, como la opción del navegador
+  if (vp) vp.setAttribute('content', pref === 'desktop' && pantallaPequena() ? 'width=1280' : (vp.getAttribute('data-orig') || 'width=device-width, initial-scale=1.0'));
+  requestAnimationFrame(() => applyLayout(true));
+}
+
+function applyLayout(forzar) {
+  const pref = getLayoutPref();
+  const antes = document.documentElement.getAttribute('data-layout');
+  // Automático: móvil si la ventana es estrecha o la pantalla física lo es
+  // (tras quitar "versión escritorio" el navegador tarda en recalcular la ventana)
+  const ahora = pref === 'mobile' || pref === 'desktop' ? pref
+    : (window.innerWidth <= LAYOUT_BREAKPOINT || pantallaPequena() ? 'mobile' : 'desktop');
+  document.documentElement.setAttribute('data-layout', ahora);
+  const volver = document.getElementById('layoutBackToMobile');
+  if (volver) volver.style.display = pref === 'desktop' && pantallaPequena() ? 'block' : 'none';
+  if (forzar || antes !== ahora) {
+    if (typeof filteredData !== 'undefined' && Array.isArray(filteredData)) renderTable();
+    renderMarketGauge();
+  }
+  renderSPYChart(); // depende del ancho del contenedor en móvil
+}
+
+(function () {
+  let t = null;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => applyLayout(false), 200); });
+  window.addEventListener('DOMContentLoaded', () => applyLayout(false));
+})();
+
 function toggleMobileMenu(open) {
   const overlay = document.getElementById('mobileMenuOverlay');
   const panel = document.getElementById('mobileMenuPanel');
@@ -5311,8 +5513,8 @@ function renderMarketGauge() {
     ${arcosSVG}
     <line x1="${cx}" y1="${cy}" x2="${needleX}" y2="${needleY}" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
     <circle cx="${cx}" cy="${cy}" r="6" fill="var(--text)"/>
-    <text x="${cx - r - 6}" y="${cy + 14}" text-anchor="middle" font-size="8" fill="var(--text3)" font-family="'DM Mono',monospace">BAJISTA</text>
-    <text x="${cx + r + 6}" y="${cy + 14}" text-anchor="middle" font-size="8" fill="var(--text3)" font-family="'DM Mono',monospace">ALCISTA+</text>
+    <text x="2" y="${cy + 14}" text-anchor="start" font-size="8" fill="var(--text3)" font-family="'DM Mono',monospace">BAJISTA</text>
+    <text x="198" y="${cy + 14}" text-anchor="end" font-size="8" fill="var(--text3)" font-family="'DM Mono',monospace">ALCISTA+</text>
   `;
 
   if (label) {
@@ -5335,8 +5537,14 @@ function renderSPYChart() {
   if (emptyMsg) emptyMsg.style.display = 'none';
   svg.style.display = 'block';
 
-  const W = 700, H = 220;
-  const padL = 44, padR = 10, padT = 10, padBPrice = 130, padBRsi = 10;
+  // Escritorio: lienzo fijo 700×220 que se escala. Móvil: lienzo del ancho
+  // real del contenedor y más alto, para que texto y líneas no se encojan.
+  const movil = isMobileLayout();
+  const W = movil ? Math.max(280, Math.round((svg.parentElement.clientWidth || 360) - 16)) : 700;
+  const H = movil ? 300 : 220;
+  const fs = movil ? 10 : 8;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const padL = movil ? 30 : 44, padR = 10, padT = movil ? 22 : 10, padBPrice = movil ? 200 : 130, padBRsi = movil ? 16 : 10;
 
   const closes = __spyHistorico.map(h => h.close);
   const ma200s = __spyHistorico.filter(h => h.ma200 != null).map(h => h.ma200);
@@ -5357,10 +5565,10 @@ function renderSPYChart() {
   const rsiLine = __spyHistorico.map((h, i) => `${x(i)},${padBPrice + 20 + (1 - h.rsi/100) * (H - padBPrice - 20 - padBRsi)}`).join(' ');
 
   // Etiquetas de fecha (solo algunas, para no saturar)
-  const nLabels = 5;
+  const nLabels = movil ? 4 : 5;
   const labelIdxs = Array.from({length: nLabels}, (_, i) => Math.round(i * (n - 1) / (nLabels - 1)));
   const dateLabels = labelIdxs.map(i =>
-    `<text x="${x(i)}" y="${H-2}" text-anchor="middle" font-size="8" fill="var(--text3)" font-family="'DM Mono',monospace">${__spyHistorico[i].date.slice(5)}</text>`
+    `<text x="${x(i)}" y="${H-2}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}" font-size="${fs}" fill="var(--text3)" font-family="'DM Mono',monospace">${__spyHistorico[i].date.slice(5)}</text>`
   ).join('');
 
   // Zonas RSI de referencia (30/70)
@@ -5371,16 +5579,16 @@ function renderSPYChart() {
     <line x1="${padL}" y1="${padBPrice}" x2="${W-padR}" y2="${padBPrice}" stroke="var(--border)" stroke-width="1"/>
     <line x1="${padL}" y1="${rsiY30}" x2="${W-padR}" y2="${rsiY30}" stroke="var(--red)" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.5"/>
     <line x1="${padL}" y1="${rsiY70}" x2="${W-padR}" y2="${rsiY70}" stroke="var(--green)" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.5"/>
-    <text x="${padL-4}" y="${rsiY30+3}" text-anchor="end" font-size="7" fill="var(--red)" font-family="'DM Mono',monospace">30</text>
-    <text x="${padL-4}" y="${rsiY70+3}" text-anchor="end" font-size="7" fill="var(--green)" font-family="'DM Mono',monospace">70</text>
+    <text x="${padL-4}" y="${rsiY30+3}" text-anchor="end" font-size="${fs-1}" fill="var(--red)" font-family="'DM Mono',monospace">30</text>
+    <text x="${padL-4}" y="${rsiY70+3}" text-anchor="end" font-size="${fs-1}" fill="var(--green)" font-family="'DM Mono',monospace">70</text>
 
     <polyline points="${ma200Line}" fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.8"/>
     <polyline points="${priceLine}" fill="none" stroke="var(--blue)" stroke-width="2"/>
     <polyline points="${rsiLine}" fill="none" stroke="var(--purple)" stroke-width="1.5"/>
 
-    <text x="${padL}" y="12" font-size="8" fill="var(--blue)" font-family="'DM Mono',monospace">— Precio SPY</text>
-    <text x="${padL+90}" y="12" font-size="8" fill="var(--amber)" font-family="'DM Mono',monospace">╌ MA200</text>
-    <text x="${padL+160}" y="12" font-size="8" fill="var(--purple)" font-family="'DM Mono',monospace">— RSI</text>
+    <text x="${padL}" y="12" font-size="${fs}" fill="var(--blue)" font-family="'DM Mono',monospace">— Precio SPY</text>
+    <text x="${padL + fs * 11}" y="12" font-size="${fs}" fill="var(--amber)" font-family="'DM Mono',monospace">╌ MA200</text>
+    <text x="${padL + fs * 19}" y="12" font-size="${fs}" fill="var(--purple)" font-family="'DM Mono',monospace">— RSI</text>
     ${dateLabels}
   `;
 }
