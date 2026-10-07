@@ -37,6 +37,18 @@ def test_operations_reference_setup_instead_of_copying_analysis():
     assert "state.analyses.forEach(a=>{let s=a.shadow||{},op=liveForSetup(a)" in html
 
 
+def test_manual_historical_trade_form_updates_live_history():
+    html = _html()
+    assert 'onclick="openHistoricalTrade()"' in html
+    assert 'id="tradeHistoryBody"' in html
+    assert "source:'HISTORICAL_MANUAL'" in html
+    assert "status:'CLOSED'" in html
+    assert "exitDate<entryDate" in html
+    assert "exitDate>today()" in html
+    assert "tp1Shares>=shares" in html
+    assert "window.saveHistoricalTrade = saveHistoricalTrade" in html
+
+
 def test_registry_bindings_replace_candidate_and_history_bindings():
     html = _html()
     assert "$('registrySearch').oninput=renderRegistry" in html
