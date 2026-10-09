@@ -526,8 +526,8 @@ def main():
         raise RuntimeError("No hay precios")
 
     indicators = build_indicators(prices)
-    spy20 = download_spy_20d(args.years)
-    entries_by_date, signal_counts = build_signals(prices, indicators, fund_scores, spy20)
+    benchmarks = download_context_benchmarks(args.years)
+    entries_by_date, signal_counts = build_signals(prices, indicators, fund_scores, benchmarks)
     price_maps, all_dates = make_price_maps(prices)
     print("Signal counts:", signal_counts)
     print("Fechas con FULL:", len(entries_by_date))
