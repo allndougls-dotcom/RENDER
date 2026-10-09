@@ -266,7 +266,7 @@ def calc_metrics(eq, tr, trade_risk_pct, portfolio_cap_pct, accepted, rejected,
 
     worst_day = float(daily.min() * 100.0) if len(daily) else 0.0
     weekly = s.resample("W-FRI").last().pct_change().dropna()
-    monthly = s.resample("M").last().pct_change().dropna()
+    monthly = s.resample("ME").last().pct_change().dropna()
     worst_week = float(weekly.min() * 100.0) if len(weekly) else 0.0
     worst_month = float(monthly.min() * 100.0) if len(monthly) else 0.0
 
