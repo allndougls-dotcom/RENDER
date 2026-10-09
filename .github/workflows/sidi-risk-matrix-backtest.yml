@@ -75,7 +75,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/sidi-risk-matrix-results
+          mkdir -p /tmp/sidi-risk-matrix-results
+          cp -a data/risk_matrix/. /tmp/sidi-risk-matrix-results/
+          git reset --hard HEAD
+          git clean -fd data/risk_matrix/ || true
           git pull --rebase origin sidi-risk-matrix
+          mkdir -p data/risk_matrix
+          cp -a /tmp/sidi-risk-matrix-results/. data/risk_matrix/
           git add data/risk_matrix/
           if git diff --cached --quiet; then
             echo "No result changes to commit"
