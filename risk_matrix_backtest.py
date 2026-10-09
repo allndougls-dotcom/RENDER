@@ -35,7 +35,7 @@ COST_PCT_RT = 0.001
 TRADE_RISKS = [0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00]
 PORTFOLIO_CAPS = [round(x * 0.25, 2) for x in range(2, 25)]  # 0.50% .. 6.00%
 STRATEGY_VERSION = "SIDI_INTRADAY_V2"
-MODEL_VERSION = "RISK_MATRIX_DAILY_PROXY_V1"
+MODEL_VERSION = "RISK_MATRIX_DAILY_PROXY_V1"  # risk-layer validation
 
 
 @dataclass
