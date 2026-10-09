@@ -512,10 +512,15 @@ def main():
     print(f"Modelo: {MODEL_VERSION} · Capital €{INITIAL_CAP:,.0f} · max posiciones {MAX_POSITIONS}")
     print("=" * 78)
 
-    tickers = [norm_ticker(t) for t in load_tickers()]
+    all_tickers = [norm_ticker(t) for t in load_tickers()]
+    fund_scores = {norm_ticker(t): v for t, v in load_fundamental_scores().items()}
+    tickers = [
+        t for t in all_tickers
+        if t in fund_scores and float(fund_scores[t].get("fund_score", 0.0)) >= 6.5
+    ]
     if args.quick:
         tickers = tickers[:80]
-    fund_scores = {norm_ticker(t): v for t, v in load_fundamental_scores().items()}
+    print(f"Universo tras gate fundamental >=6.5: {len(tickers)}/{len(all_tickers)}")
     prices = {norm_ticker(t): df for t, df in download_prices(tickers, years=args.years).items()}
     if not prices:
         raise RuntimeError("No hay precios")
