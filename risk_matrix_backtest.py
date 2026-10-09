@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from backtest import INITIAL_CAP, build_indicators, download_prices, load_fundamental_scores, load_tickers
+from backtest import INITIAL_CAP, build_indicators, download_prices, load_fundamental_scores, load_tickers\nfrom modules.ingesta.sidi_context import SECTOR_ETF_MAP, _abnormal20, _close_series, _spy20
 
 STOP_PCT = 0.05
 TP1_ATR_MULT = 1.0
@@ -35,7 +35,7 @@ COST_PCT_RT = 0.001
 TRADE_RISKS = [0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00]
 PORTFOLIO_CAPS = [round(x * 0.25, 2) for x in range(2, 25)]  # 0.50% .. 6.00%
 STRATEGY_VERSION = "SIDI_INTRADAY_V2"
-MODEL_VERSION = "RISK_MATRIX_DAILY_PROXY_V1"  # risk-layer validation
+MODEL_VERSION = "RISK_MATRIX_DAILY_PROXY_V2"  # exact SPY+sector abnormal20 context
 
 
 @dataclass
@@ -71,41 +71,48 @@ def norm_ticker(ticker: str) -> str:
     return str(ticker).strip().upper().replace(".", "-")
 
 
-def download_spy_20d(years: int) -> Dict[str, float]:
+def download_context_benchmarks(years: int):
+    """Descarga SPY + ETFs sectoriales para reproducir el contexto de producción."""
+    tickers = ["SPY"] + sorted(set(SECTOR_ETF_MAP.values()))
     end = pd.Timestamp.today().normalize()
-    start = end - pd.Timedelta(days=365 * years + 120)
+    start = end - pd.Timedelta(days=365 * years + 320)
     raw = yf.download(
-        "SPY",
+        tickers,
         start=start.strftime("%Y-%m-%d"),
         end=(end + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-        auto_adjust=True, progress=False, threads=False,
+        auto_adjust=True, progress=False, group_by="ticker", threads=True,
     )
-    if raw is None or raw.empty:
-        raise RuntimeError("No se pudo descargar SPY")
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw.columns = raw.columns.get_level_values(0)
-    raw = raw.reset_index()
-    close = pd.to_numeric(raw["Close"], errors="coerce")
-    ret20 = (close / close.shift(20) - 1.0) * 100.0
-    return {
-        str(row["Date"])[:10]: float(ret20.iloc[i])
-        for i, (_, row) in enumerate(raw.iterrows())
-        if pd.notna(ret20.iloc[i])
-    }
+    out = {}
+    for ticker in tickers:
+        try:
+            df_t = raw[ticker].copy() if isinstance(raw.columns, pd.MultiIndex) else raw.copy()
+            s = _close_series(df_t)
+            if len(s) >= 141:
+                out[ticker] = s
+        except Exception:
+            continue
+    if "SPY" not in out:
+        raise RuntimeError("No se pudo descargar SPY para el contexto SIDI")
+    return out
 
 
-def build_signals(prices, indicators, fund_scores, spy20_by_date):
+def build_signals(prices, indicators, fund_scores, benchmarks):
     """
     Proxy histórico del contrato congelado:
     DD60<=-12 · RSI<40 · MACD improving · volume decreasing ·
     fund_score>=6.5 · SPY20<=+1% · abnormal20<=-10%.
-    Entrada: siguiente Open.
+
+    abnormal20 replica modules.ingesta.sidi_context:
+    alpha + beta_SPY + beta_sector estimados en 120 sesiones previas y
+    residual acumulado de las 20 sesiones recientes.
+    Entrada histórica: siguiente Open.
     """
     entries_by_date = {}
     counts = {
         "technical_candidates": 0, "fund_tickers": 0, "context_ready": 0,
-        "full_setups": 0, "skipped_no_next_open": 0,
+        "full_setups": 0, "skipped_no_next_open": 0, "missing_sector_context": 0,
     }
+    spy_close_all = benchmarks["SPY"]
 
     for ticker, ind in indicators.items():
         fs = fund_scores.get(ticker) or fund_scores.get(ticker.replace("-", "."))
@@ -113,12 +120,20 @@ def build_signals(prices, indicators, fund_scores, spy20_by_date):
             continue
         counts["fund_tickers"] += 1
         df = prices.get(ticker)
-        if df is None or len(df) < 90:
+        if df is None or len(df) < 170:
             continue
+
+        sector = str(fs.get("sector", ""))
+        sector_etf = SECTOR_ETF_MAP.get(sector)
+        sector_close_all = benchmarks.get(sector_etf) if sector_etf else None
+        if sector_close_all is None or len(sector_close_all) < 141:
+            counts["missing_sector_context"] += 1
+            continue
+
         df = df.copy().reset_index(drop=True)
+        stock_close_all = _close_series(df)
         date_to_idx = {str(row["Date"])[:10]: i for i, row in df.iterrows()}
         dates = ind["dates"]
-        close = np.asarray(ind["close"], dtype=float)
 
         for i in range(62, len(dates) - 1):
             rsi, dd60 = ind["rsi"][i], ind["dd60"][i]
@@ -134,13 +149,16 @@ def build_signals(prices, indicators, fund_scores, spy20_by_date):
             counts["technical_candidates"] += 1
 
             signal_date = dates[i]
-            spy20 = spy20_by_date.get(signal_date)
-            if spy20 is None or i < 20 or not np.isfinite(close[i - 20]) or close[i - 20] <= 0:
+            cutoff = pd.Timestamp(signal_date).tz_localize(None).normalize()
+            stock_cut = stock_close_all.loc[:cutoff]
+            spy_cut = spy_close_all.loc[:cutoff]
+            sector_cut = sector_close_all.loc[:cutoff]
+            spy20 = _spy20(spy_cut)
+            abnormal20, _, _, _ = _abnormal20(stock_cut, spy_cut, sector_cut)
+            if not (np.isfinite(spy20) and np.isfinite(abnormal20)):
                 continue
             counts["context_ready"] += 1
-            ticker20 = (float(close[i]) / float(close[i - 20]) - 1.0) * 100.0
-            abnormal20 = ticker20 - float(spy20)
-            if float(spy20) > 1.0 or abnormal20 > -10.0:
+            if float(spy20) > 1.0 or float(abnormal20) > -10.0:
                 continue
 
             row_idx = date_to_idx.get(signal_date)
@@ -160,10 +178,10 @@ def build_signals(prices, indicators, fund_scores, spy20_by_date):
                 "fund_score": float(fs.get("fund_score", 0.0)),
                 "dd60": float(dd60), "rsi": float(rsi),
                 "spy20": float(spy20), "abnormal20": float(abnormal20),
+                "sector": sector, "sector_etf": sector_etf,
             })
             counts["full_setups"] += 1
 
-    # Prioridad determinista cuando hay más FULL que capacidad.
     for _, signals in entries_by_date.items():
         signals.sort(key=lambda s: (-s["fund_score"], s["abnormal20"], s["dd60"], s["rsi"], s["ticker"]))
     return entries_by_date, counts
