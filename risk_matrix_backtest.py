@@ -23,7 +23,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from backtest import INITIAL_CAP, build_indicators, download_prices, load_fundamental_scores, load_tickers\nfrom modules.ingesta.sidi_context import SECTOR_ETF_MAP, _abnormal20, _close_series, _spy20
+from backtest import INITIAL_CAP, build_indicators, download_prices, load_fundamental_scores, load_tickers
+from modules.ingesta.sidi_context import SECTOR_ETF_MAP, _abnormal20, _close_series, _spy20
 
 STOP_PCT = 0.05
 TP1_ATR_MULT = 1.0
