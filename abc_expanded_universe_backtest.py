@@ -26,15 +26,18 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import datetime
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import requests
+import yfinance as yf
 
-from backtest import build_indicators, download_prices
-from modules.ingesta.fundamental import calcular_fundamentales
+from backtest import build_indicators
+from modules.ingesta.fundamental import _fund_yf
 from modules.ingesta.scoring import _fund_score, _sector_medians
 from modules.ingesta.sidi_context import SECTOR_ETF_MAP, _abnormal20, _close_series, _spy20
 from pattern_backtest import build_episode_dataset, enrich_signals, metrics as episode_metrics
@@ -53,7 +56,7 @@ from stabilization_gate_backtest import (
 )
 
 STRATEGY_VERSION = "SIDI_INTRADAY_V2"
-MODEL_VERSION = "SIDI_ABC_EXPANDED_UNIVERSE_V1"  # fixed ABC, expanded universe
+MODEL_VERSION = "SIDI_ABC_EXPANDED_UNIVERSE_V2"  # same model, faster IO only
 YEARS = 8
 TRADE_RISK_PCT = 1.5
 PORTFOLIO_CAP_PCT = 4.5
@@ -104,6 +107,78 @@ def fetch_index(index_name, url):
     best["sector"] = best["sector"].astype(str).str.strip()
     best["index_bucket"] = index_name
     return best.drop_duplicates("ticker")
+
+
+
+def fast_download_prices(tickers, years=8):
+    end = datetime.today().strftime("%Y-%m-%d")
+    start = (datetime.today()-timedelta(days=365*years+30)).strftime("%Y-%m-%d")
+    tickers=[norm_ticker(t) for t in tickers]
+    prices={}
+    chunk_size=50
+    for i in range(0,len(tickers),chunk_size):
+        chunk=tickers[i:i+chunk_size]
+        n=i//chunk_size+1
+        total=(len(tickers)+chunk_size-1)//chunk_size
+        print(f"  Fast price batch {n}/{total} ({len(chunk)})...")
+        raw=None
+        for attempt in range(3):
+            try:
+                raw=yf.download(
+                    chunk,start=start,end=end,auto_adjust=True,progress=False,
+                    group_by="ticker",threads=True
+                )
+                if raw is not None and not raw.empty:
+                    break
+            except Exception as e:
+                print(f"    retry {attempt+1}: {e}")
+            time.sleep(1.5*(attempt+1))
+        if raw is None or raw.empty:
+            continue
+        for t in chunk:
+            try:
+                df=raw[t].copy() if isinstance(raw.columns,pd.MultiIndex) else raw.copy()
+                df=df.reset_index()
+                if "Date" not in df.columns:
+                    continue
+                df=df.dropna(subset=["Close"])
+                if len(df)>170:
+                    prices[t]=df.reset_index(drop=True)
+            except Exception:
+                continue
+        time.sleep(0.5)
+    print(f"  Fast prices OK: {len(prices)}/{len(tickers)}")
+    return prices
+
+
+def fast_candidate_fundamentals(candidate_tickers, universe, medians):
+    tickers=sorted(candidate_tickers)
+    print(f"  Fast fundamentals: {len(tickers)} candidate tickers...")
+    rows=[]
+    def one(t):
+        d=_fund_yf(t)
+        d["ticker"]=t
+        return d
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futs={ex.submit(one,t):t for t in tickers}
+        for idx,fut in enumerate(as_completed(futs),1):
+            t=futs[fut]
+            try:
+                rows.append(fut.result())
+            except Exception:
+                rows.append({"ticker":t})
+            if idx%25==0:
+                print(f"    fundamentals {idx}/{len(tickers)}")
+    fund=pd.DataFrame(rows)
+    sectors=universe[["ticker","sector"]].drop_duplicates("ticker")
+    fund=fund.merge(sectors,on="ticker",how="left")
+    scored=[]
+    for _,row in fund.iterrows():
+        score=_fund_score(row,medians)
+        d=row.to_dict()
+        d.update(score.to_dict())
+        scored.append(d)
+    return pd.DataFrame(scored)
 
 
 def build_universe():
@@ -236,22 +311,6 @@ def load_sp500_reference():
     return df, medians
 
 
-def score_candidate_tickers(candidate_tickers, universe, medians):
-    print(f"  Descargando fundamentales sólo para {len(candidate_tickers)} tickers ABC...")
-    cfg = {"USE_FMP":False, "FMP_API_KEY":""}
-    fund = calcular_fundamentales(sorted(candidate_tickers), cfg)
-    sectors = universe[["ticker","sector"]].drop_duplicates("ticker")
-    fund = fund.merge(sectors, on="ticker", how="left")
-    scored = []
-    for _, row in fund.iterrows():
-        score = _fund_score(row, medians)
-        d = row.to_dict()
-        d.update(score.to_dict())
-        scored.append(d)
-    sdf = pd.DataFrame(scored)
-    return sdf
-
-
 def add_liquidity(signals, prices):
     out = []
     for sig in signals:
@@ -303,7 +362,7 @@ def main():
     universe.to_csv(OUT_DIR/"sp1500_current_universe.csv",index=False)
 
     tickers=universe["ticker"].tolist()
-    prices=download_prices(tickers, years=YEARS)
+    prices=fast_download_prices(tickers, years=YEARS)
     indicators=build_indicators(prices)
     benchmarks=download_context_benchmarks(YEARS)
 
@@ -324,7 +383,7 @@ def main():
     candidate_tickers=sorted(set(s["ticker"] for s in abc_prefund))
 
     master, medians=load_sp500_reference()
-    scored=score_candidate_tickers(candidate_tickers, universe, medians)
+    scored=fast_candidate_fundamentals(candidate_tickers, universe, medians)
     scored.to_csv(OUT_DIR/"abc_candidate_fundamentals.csv",index=False)
     score_map={
         str(r["ticker"]):float(r["fund_score"])
