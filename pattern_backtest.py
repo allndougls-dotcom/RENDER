@@ -38,7 +38,7 @@ from risk_matrix_backtest import (
     norm_ticker,
 )
 
-MODEL_VERSION = "SIDI_PATTERN_DISCOVERY_V1"
+MODEL_VERSION = "SIDI_PATTERN_DISCOVERY_V1"  # chronological OOS validation
 OUT_DIR_DEFAULT = "data/pattern_analysis"
 
 # fund_score se conserva para diagnóstico, pero NO se usa para proponer filtros:
