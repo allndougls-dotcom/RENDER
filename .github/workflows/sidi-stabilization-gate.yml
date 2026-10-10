@@ -1,0 +1,95 @@
+name: SIDI Stabilization Gate Backtest
+
+on:
+  push:
+    branches: [sidi-stabilization-gate]
+    paths:
+      - 'stabilization_gate_backtest.py'
+      - '.github/workflows/sidi-stabilization-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  stabilization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile engine
+        run: |
+          python -m py_compile stabilization_gate_backtest.py pattern_backtest.py risk_matrix_backtest.py backtest.py
+
+      - name: Run 8-year stabilization confirmation
+        run: |
+          python stabilization_gate_backtest.py --years 8
+
+      - name: Validate output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          root = Path('data/stabilization_gate')
+          report = json.loads((root / 'stabilization_report.json').read_text(encoding='utf-8'))
+          summary = pd.read_csv(root / 'stabilization_summary.csv')
+          walk = pd.read_csv(root / 'stabilization_walkforward.csv')
+          robust = pd.read_csv(root / 'stabilization_robustness.csv')
+
+          assert report['strategy_version'] == 'SIDI_INTRADAY_V2'
+          assert report['model_version'] == 'SIDI_STABILIZATION_CONFIRMATION_V1'
+          assert list(report['frozen_gates']) == ['A', 'B', 'C']
+          assert set(summary['config']) == {'BASE','A','B','C','AB','AC','BC','ABC'}
+          assert {'GLOBAL_8Y','DISCOVERY_ERA_2022_2026'}.issubset(set(summary['scope']))
+          assert len(walk) > 20, len(walk)
+          assert len(robust) == 7, len(robust)
+          assert robust['rolling_windows'].min() >= 3, robust[['config','rolling_windows']].to_dict('records')
+          print('OK stabilization confirmation')
+          print(robust.to_string(index=False))
+          PY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-stabilization-gate-results
+          path: |
+            data/stabilization_gate/stabilization_report.json
+            data/stabilization_gate/stabilization_summary.csv
+            data/stabilization_gate/stabilization_walkforward.csv
+            data/stabilization_gate/stabilization_robustness.csv
+          retention-days: 30
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/sidi-stabilization-results
+          mkdir -p /tmp/sidi-stabilization-results
+          cp -a data/stabilization_gate/. /tmp/sidi-stabilization-results/
+          git reset --hard HEAD
+          git clean -fd data/stabilization_gate/ || true
+          git pull --rebase origin sidi-stabilization-gate
+          mkdir -p data/stabilization_gate
+          cp -a /tmp/sidi-stabilization-results/. data/stabilization_gate/
+          git add data/stabilization_gate/
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "backtest: store stabilization gate results [skip actions]"
+            git push
+          fi
