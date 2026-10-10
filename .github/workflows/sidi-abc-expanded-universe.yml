@@ -1,0 +1,92 @@
+name: SIDI ABC Expanded Universe
+
+on:
+  push:
+    branches: [sidi-abc-expanded-universe]
+    paths:
+      - 'abc_expanded_universe_backtest.py'
+      - '.github/workflows/sidi-abc-expanded-universe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  abc-expanded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile engine
+        run: |
+          python -m py_compile abc_expanded_universe_backtest.py pattern_backtest.py risk_matrix_backtest.py stabilization_gate_backtest.py
+
+      - name: Run 8-year expanded-universe backtest
+        run: |
+          python abc_expanded_universe_backtest.py
+
+      - name: Validate output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path('data/abc_expanded_universe')
+          report=json.loads((root/'abc_expanded_report.json').read_text(encoding='utf-8'))
+          assert report['strategy_version']=='SIDI_INTRADAY_V2'
+          assert report['model_version']=='SIDI_ABC_EXPANDED_UNIVERSE_V1'
+          assert report['abc_full_signals'] > 0
+          assert report['prices_downloaded'] >= 1000, report['prices_downloaded']
+          for k in ['SP500_ABC','SP1500_ABC','SP1500_ABC_ADV20_20M']:
+              assert k in report['results']
+              assert report['results'][k]['episode_metrics']['n'] > 0
+          print('OK expanded ABC')
+          for k,v in report['results'].items():
+              print(k, v['episode_metrics'], v['portfolio_metrics'])
+          PY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-abc-expanded-universe
+          path: |
+            data/abc_expanded_universe/abc_expanded_report.json
+            data/abc_expanded_universe/abc_expanded_signals.csv
+            data/abc_expanded_universe/abc_expanded_annual.csv
+            data/abc_expanded_universe/abc_candidate_fundamentals.csv
+            data/abc_expanded_universe/sp1500_current_universe.csv
+          retention-days: 30
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/abc-expanded-results
+          mkdir -p /tmp/abc-expanded-results
+          cp -a data/abc_expanded_universe/. /tmp/abc-expanded-results/
+          git reset --hard HEAD
+          git clean -fd data/abc_expanded_universe/ || true
+          git pull --rebase origin sidi-abc-expanded-universe
+          mkdir -p data/abc_expanded_universe
+          cp -a /tmp/abc-expanded-results/. data/abc_expanded_universe/
+          git add data/abc_expanded_universe/
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "backtest: store ABC expanded-universe results [skip actions]"
+            git push
+          fi
