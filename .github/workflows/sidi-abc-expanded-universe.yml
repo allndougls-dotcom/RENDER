@@ -48,7 +48,7 @@ jobs:
           root=Path('data/abc_expanded_universe')
           report=json.loads((root/'abc_expanded_report.json').read_text(encoding='utf-8'))
           assert report['strategy_version']=='SIDI_INTRADAY_V2'
-          assert report['model_version']=='SIDI_ABC_EXPANDED_UNIVERSE_V1'
+          assert report['model_version']=='SIDI_ABC_EXPANDED_UNIVERSE_V2'
           assert report['abc_full_signals'] > 0
           assert report['prices_downloaded'] >= 1000, report['prices_downloaded']
           for k in ['SP500_ABC','SP1500_ABC','SP1500_ABC_ADV20_20M']:
