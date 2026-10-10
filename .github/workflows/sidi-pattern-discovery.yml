@@ -1,0 +1,111 @@
+name: SIDI Pattern Discovery Backtest
+
+on:
+  push:
+    branches: [sidi-pattern-analysis]
+    paths:
+      - 'pattern_backtest.py'
+      - '.github/workflows/sidi-pattern-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pattern-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile analysis engine
+        run: |
+          python -m py_compile pattern_backtest.py risk_matrix_backtest.py backtest.py modules/ingesta/sidi_context.py
+
+      - name: Run 4-year pattern discovery
+        run: |
+          python pattern_backtest.py --years 4
+
+      - name: Validate pattern report
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          root = Path('data/pattern_analysis')
+          report_path = root / 'pattern_report.json'
+          trades_path = root / 'pattern_trades.csv'
+          candidates_path = root / 'pattern_candidates.csv'
+          assert report_path.exists(), 'Missing pattern_report.json'
+          assert trades_path.exists(), 'Missing pattern_trades.csv'
+          assert candidates_path.exists(), 'Missing pattern_candidates.csv'
+
+          report = json.loads(report_path.read_text(encoding='utf-8'))
+          assert report['strategy_version'] == 'SIDI_INTRADAY_V2'
+          assert report['model_version'] == 'SIDI_PATTERN_DISCOVERY_V1'
+          assert report['episode_trades'] >= 100, report['episode_trades']
+
+          trades = pd.read_csv(trades_path)
+          assert len(trades) == report['episode_trades']
+          assert set(trades['split']) == {'train', 'validation', 'test'}
+          assert (trades.groupby('split').size() >= 25).all(), trades.groupby('split').size().to_dict()
+
+          candidates = pd.read_csv(candidates_path)
+          assert len(candidates) > 0, 'No candidate patterns generated'
+
+          forbidden = ['mfe_r', 'mae_r', 'exit_reason', 'sessions', 'tp1_hit']
+          labels = ' '.join(candidates['label'].astype(str).tolist())
+          assert not any(x in labels for x in forbidden), 'Post-entry leakage in candidate labels'
+
+          print('OK pattern discovery')
+          print('Period:', report['period'])
+          print('Episodes:', report['episode_trades'])
+          print('Splits:', trades.groupby('split').size().to_dict())
+          print('Robust singles:', len(report['robust_single_patterns']))
+          print('Robust interactions:', len(report['robust_interactions']))
+          PY
+
+      - name: Upload analysis artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-pattern-analysis
+          path: |
+            data/pattern_analysis/pattern_report.json
+            data/pattern_analysis/pattern_trades.csv
+            data/pattern_analysis/pattern_candidates.csv
+            data/pattern_analysis/pattern_feature_buckets.csv
+            data/pattern_analysis/pattern_categories.csv
+          retention-days: 30
+
+      - name: Commit analysis results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/sidi-pattern-results
+          mkdir -p /tmp/sidi-pattern-results
+          cp -a data/pattern_analysis/. /tmp/sidi-pattern-results/
+          git reset --hard HEAD
+          git clean -fd data/pattern_analysis/ || true
+          git pull --rebase origin sidi-pattern-analysis
+          mkdir -p data/pattern_analysis
+          cp -a /tmp/sidi-pattern-results/. data/pattern_analysis/
+          git add data/pattern_analysis/
+          if git diff --cached --quiet; then
+            echo "No result changes to commit"
+          else
+            git commit -m "backtest: store SIDI pattern discovery results [skip actions]"
+            git push
+          fi
