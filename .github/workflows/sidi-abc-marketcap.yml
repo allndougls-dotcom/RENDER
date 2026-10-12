@@ -1,0 +1,94 @@
+name: SIDI ABC Market Cap Backtest
+
+on:
+  push:
+    branches: [sidi-abc-marketcap]
+    paths:
+      - 'abc_marketcap_backtest.py'
+      - '.github/workflows/sidi-abc-marketcap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  marketcap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile engine
+        run: |
+          python -m py_compile abc_marketcap_backtest.py abc_expanded_universe_backtest.py pattern_backtest.py risk_matrix_backtest.py stabilization_gate_backtest.py
+
+      - name: Run ABC market-cap backtest
+        run: |
+          python abc_marketcap_backtest.py
+
+      - name: Validate output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path('data/abc_marketcap')
+          report=json.loads((root/'abc_marketcap_report.json').read_text(encoding='utf-8'))
+          summary=pd.read_csv(root/'abc_marketcap_summary.csv')
+          robust=pd.read_csv(root/'abc_marketcap_robustness.csv')
+
+          assert report['strategy_version']=='SIDI_INTRADAY_V2'
+          assert report['model_version']=='SIDI_ABC_MARKETCAP_V1'
+          assert report['prices_downloaded'] >= 150, report['prices_downloaded']
+          expected={'ALL_SP1500','MCAP_5B','MCAP_10B','MCAP_20B','MCAP_50B','MCAP_100B','SP500_ABC_REFERENCE'}
+          assert expected == set(summary['group']), summary['group'].tolist()
+          assert (summary[summary['group'].str.startswith('MCAP_')]['episodes'] >= 20).all()
+          assert len(robust) == 5
+          print('OK ABC market-cap')
+          print(summary.to_string(index=False))
+          print(robust.to_string(index=False))
+          PY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-abc-marketcap-results
+          path: |
+            data/abc_marketcap/abc_marketcap_report.json
+            data/abc_marketcap/abc_marketcap_summary.csv
+            data/abc_marketcap/abc_marketcap_annual.csv
+            data/abc_marketcap/abc_marketcap_robustness.csv
+          retention-days: 30
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/abc-marketcap-results
+          mkdir -p /tmp/abc-marketcap-results
+          cp -a data/abc_marketcap/. /tmp/abc-marketcap-results/
+          git reset --hard HEAD
+          git clean -fd data/abc_marketcap/ || true
+          git pull --rebase origin sidi-abc-marketcap
+          mkdir -p data/abc_marketcap
+          cp -a /tmp/abc-marketcap-results/. data/abc_marketcap/
+          git add data/abc_marketcap/
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "backtest: store ABC market-cap results [skip actions]"
+            git push
+          fi
