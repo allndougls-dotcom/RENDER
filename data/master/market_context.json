@@ -1,18 +1,18 @@
 {
-  "date": "2026-10-09 18:58",
+  "date": "2026-10-12 10:38",
   "sidi_strategy_version": "SIDI_INTRADAY_V2",
-  "spy_price": 773.93,
-  "spy_ma20": 766.79,
-  "spy_ma50": 765.51,
-  "spy_ma200": 719.16,
-  "spy_rsi": 61.6,
-  "spy_return_20d": 2.3781,
+  "spy_price": 778.57,
+  "spy_ma20": 767.6,
+  "spy_ma50": 766.28,
+  "spy_ma200": 719.66,
+  "spy_rsi": 55.6,
+  "spy_return_20d": 2.1214,
   "sidi_spy20_gate": false,
-  "spy_vs200": 7.62,
-  "spy_dd52": -0.66,
-  "spy_ma200_slope": 1.327,
-  "spy_vol_ratio": 0.92,
-  "vix": 15.41,
+  "spy_vs200": 8.19,
+  "spy_dd52": -0.07,
+  "spy_ma200_slope": 1.318,
+  "spy_vol_ratio": 0.9,
+  "vix": 14.84,
   "market_regime": "ALCISTA FUERTE",
   "regime_color": "#22c55e",
   "regime_icon": "🟢",
@@ -20,12 +20,6 @@
   "regime_score": 10,
   "filter_rec": "SIDI_INTRADAY_V2: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
   "history": [
-    {
-      "date": "2025-10-10",
-      "close": 646.05,
-      "ma200": 593.75,
-      "rsi": 35.9
-    },
     {
       "date": "2025-10-13",
       "close": 655.96,
@@ -1519,6 +1513,12 @@
       "close": 773.93,
       "ma200": 719.16,
       "rsi": 61.6
+    },
+    {
+      "date": "2026-10-09",
+      "close": 778.57,
+      "ma200": 719.66,
+      "rsi": 55.6
     }
   ]
 }
