@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T22:49:05.517528Z",
+  "generated_at": "2026-10-13T22:49:42.455841Z",
   "strategy_version": "SIDI_INTRADAY_V2",
   "model_version": "SIDI_ABC_CROSS_MARKET_V1",
   "methodology": {
@@ -15,22 +15,22 @@
     "FTSE100": {
       "market": "FTSE100",
       "constituents_scraped": 100,
-      "prices_downloaded": 100,
+      "prices_downloaded": 99,
       "candidate_tickers": 15,
-      "abc_prefund": 29,
-      "abc_full": 8,
+      "abc_prefund": 28,
+      "abc_full": 7,
       "counts": {
-        "technical": 5098,
-        "context": 4840,
-        "prefund": 228
+        "technical": 5022,
+        "context": 4765,
+        "prefund": 227
       },
       "episode_metrics": {
         "n": 6,
         "win_rate": 33.33333333333333,
-        "avg_r": -0.33004359134179845,
-        "median_r": -0.7027676683039373,
-        "profit_factor": 0.4252673809462785,
-        "p10_r": -1.020000000000001,
+        "avg_r": -0.3300441747676315,
+        "median_r": -0.7027694717394379,
+        "profit_factor": 0.4252669666225388,
+        "p10_r": -1.0200000000000011,
         "hard_loss_rate": 50.0,
         "gap_loss_rate": 0.0
       },
@@ -57,12 +57,12 @@
         "profit_factor": 0.0,
         "avg_r_multiple": -1.02,
         "accepted_entries": 3,
-        "signals_seen": 8,
+        "signals_seen": 7,
         "rejected_risk_cap": 0,
         "rejected_slots": 0,
-        "rejected_cash": 5,
+        "rejected_cash": 4,
         "rejected_already_open": 0,
-        "acceptance_rate_pct": 37.5,
+        "acceptance_rate_pct": 42.857,
         "max_positions_seen": 1,
         "max_planned_risk_pct": 1.516,
         "avg_planned_risk_pct": 0.007,
@@ -74,7 +74,7 @@
         "total_cost_eur": 8.48
       },
       "portfolio_trades": 3,
-      "same_ticker_overlap_skipped": 2
+      "same_ticker_overlap_skipped": 1
     },
     "NIKKEI225": {
       "market": "NIKKEI225",
@@ -95,10 +95,10 @@
       "episode_metrics": {
         "n": 8,
         "win_rate": 62.5,
-        "avg_r": 0.02570897819656462,
-        "median_r": 0.3380827341748893,
-        "profit_factor": 1.0504185647341497,
-        "p10_r": -1.3257862778740064,
+        "avg_r": 0.025709133751158603,
+        "median_r": 0.33808294088660107,
+        "profit_factor": 1.0504188697964245,
+        "p10_r": -1.3257862778740077,
         "hard_loss_rate": 37.5,
         "gap_loss_rate": 12.5
       },
@@ -149,19 +149,19 @@
       "constituents_scraped": 200,
       "prices_downloaded": 195,
       "candidate_tickers": 99,
-      "abc_prefund": 265,
+      "abc_prefund": 266,
       "abc_full": 80,
       "counts": {
-        "technical": 12145,
-        "context": 11627,
-        "prefund": 2748
+        "technical": 12150,
+        "context": 11631,
+        "prefund": 2749
       },
       "episode_metrics": {
         "n": 68,
         "win_rate": 50.0,
-        "avg_r": -0.09325384446331163,
-        "median_r": 0.005575045087201885,
-        "profit_factor": 0.8045476009556324,
+        "avg_r": -0.0932539385142407,
+        "median_r": 0.005575723422716089,
+        "profit_factor": 0.8045474584207017,
         "p10_r": -1.0200000000000022,
         "hard_loss_rate": 44.11764705882353,
         "gap_loss_rate": 8.823529411764707
