@@ -1,0 +1,86 @@
+name: SIDI ABC Cross Market Backtest
+
+on:
+  push:
+    branches: [sidi-abc-cross-market]
+    paths:
+      - 'abc_cross_market_backtest.py'
+      - '.github/workflows/sidi-abc-cross-market.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cross-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile engine
+        run: |
+          python -m py_compile abc_cross_market_backtest.py
+
+      - name: Run cross-market validation
+        run: |
+          python abc_cross_market_backtest.py
+
+      - name: Validate output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path('data/abc_cross_market')
+          report=json.loads((root/'abc_cross_market_report.json').read_text(encoding='utf-8'))
+          summary=pd.read_csv(root/'abc_cross_market_summary.csv')
+          assert report['strategy_version']=='SIDI_INTRADAY_V2'
+          assert report['model_version']=='SIDI_ABC_CROSS_MARKET_V1'
+          assert len(summary) >= 2, summary
+          assert (summary['episodes'] > 0).all()
+          print('OK cross-market')
+          print(summary.to_string(index=False))
+          PY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-abc-cross-market-results
+          path: |
+            data/abc_cross_market/abc_cross_market_report.json
+            data/abc_cross_market/abc_cross_market_summary.csv
+          retention-days: 30
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/abc-cross-market-results
+          mkdir -p /tmp/abc-cross-market-results
+          cp -a data/abc_cross_market/. /tmp/abc-cross-market-results/
+          git reset --hard HEAD
+          git clean -fd data/abc_cross_market/ || true
+          git pull --rebase origin sidi-abc-cross-market
+          mkdir -p data/abc_cross_market
+          cp -a /tmp/abc-cross-market-results/. data/abc_cross_market/
+          git add data/abc_cross_market/
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "backtest: store ABC cross-market results [skip actions]"
+            git push
+          fi
