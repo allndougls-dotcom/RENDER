@@ -43,7 +43,7 @@ from stabilization_gate_backtest import (
     to_entries_by_date,
 )
 
-MODEL_VERSION="SIDI_ABC_CROSS_MARKET_V1"
+MODEL_VERSION="SIDI_ABC_CROSS_MARKET_V1"  # frozen thresholds
 STRATEGY_VERSION="SIDI_INTRADAY_V2"
 YEARS=8
 OUT=Path("data/abc_cross_market")
