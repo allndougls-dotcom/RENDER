@@ -33,7 +33,7 @@ from stabilization_gate_backtest import (
     to_entries_by_date,
 )
 
-MODEL_VERSION="SIDI_CROSS_MARKET_COMPONENTS_V1"
+MODEL_VERSION="SIDI_CROSS_MARKET_COMPONENTS_V1"  # frozen A/B/C decomposition
 STRATEGY_VERSION="SIDI_INTRADAY_V2"
 YEARS=8
 OUT=Path("data/cross_market_components")
