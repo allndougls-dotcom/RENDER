@@ -43,7 +43,7 @@ jobs:
           root=Path('data/cross_market_components')
           report=json.loads((root/'cross_market_components_report.json').read_text(encoding='utf-8'))
           df=pd.read_csv(root/'cross_market_components_summary.csv')
-          assert report['model_version']=='SIDI_CROSS_MARKET_COMPONENTS_V1'
+          assert report['model_version']=='SIDI_CROSS_MARKET_COMPONENTS_V2'
           assert len(df)>=16
           assert {'BASE','A','B','C','AB','AC','BC','ABC'}.issubset(set(df['config']))
           print(df.to_string(index=False))
