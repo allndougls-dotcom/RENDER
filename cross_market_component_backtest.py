@@ -33,7 +33,7 @@ from stabilization_gate_backtest import (
     to_entries_by_date,
 )
 
-MODEL_VERSION="SIDI_CROSS_MARKET_COMPONENTS_V1"  # frozen A/B/C decomposition
+MODEL_VERSION="SIDI_CROSS_MARKET_COMPONENTS_V2"  # normalized-price portfolio sizing
 STRATEGY_VERSION="SIDI_INTRADAY_V2"
 YEARS=8
 OUT=Path("data/cross_market_components")
@@ -235,6 +235,38 @@ def passes(s,config):
     f=flags(s)
     return all(f[x] for x in CONFIGS[config])
 
+
+def normalize_price_space(prices, signals):
+    """
+    Normalize each local-currency price series to synthetic base 100.
+    This preserves percentage returns, gaps and all R-multiples while
+    removing currency-unit distortions from cash/notional sizing.
+    """
+    multipliers={}
+    normalized_prices={}
+    for t,df in prices.items():
+        z=df.copy()
+        close=pd.to_numeric(z["Close"],errors="coerce").dropna()
+        if len(close)==0 or float(close.iloc[0])<=0:
+            continue
+        m=100.0/float(close.iloc[0])
+        multipliers[t]=m
+        for col in ["Open","High","Low","Close"]:
+            if col in z.columns:
+                z[col]=pd.to_numeric(z[col],errors="coerce")*m
+        normalized_prices[t]=z
+    normalized_signals=[]
+    for s in signals:
+        m=multipliers.get(s["ticker"])
+        if m is None:
+            continue
+        x=dict(s)
+        x["entry_price"]=float(x["entry_price"])*m
+        x["atr"]=float(x["atr"])*m
+        normalized_signals.append(x)
+    return normalized_prices, normalized_signals
+
+
 def run_config(full,config,pmaps,dates):
     sigs=[s for s in full if passes(s,config)]
     trades,sk=build_episode_dataset(sigs,pmaps)
@@ -262,8 +294,9 @@ def run_market(market,cfg,medians):
         fs=smap.get(s["ticker"],np.nan)
         if np.isfinite(fs) and fs>=6.5:
             x=dict(s);x["fund_score"]=fs;full.append(x)
-    pmaps,dates=make_price_maps(prices)
-    results={c:run_config(full,c,pmaps,dates) for c in CONFIGS}
+    normalized_prices, normalized_full = normalize_price_space(prices, full)
+    pmaps,dates=make_price_maps(normalized_prices)
+    results={cfg_name:run_config(normalized_full,cfg_name,pmaps,dates) for cfg_name in CONFIGS}
     return {
         "market":market,"constituents":len(uni),"prices":len(prices),
         "prefund_counts":counts,"full_before_stabilization":len(full),
@@ -316,7 +349,7 @@ def main():
         "C":f"{C_VOL_RATIO_MIN} <= volume_ratio_5_60 < {C_VOL_RATIO_MAX}",
         "market_context":"local benchmark + equal-weight local sector factor",
         "fund_score":"current fundamentals scored against S&P500 sector medians; retrospective proxy",
-        "portfolio":"1.5% / 4.5% / max 3",
+        "portfolio":"1.5% / 4.5% / max 3; local price series normalized to base 100 before sizing",
     }
     (OUT/"cross_market_components_report.json").write_text(json.dumps(clean(report),ensure_ascii=False,indent=2),encoding="utf-8")
     print("\nSUMMARY")
