@@ -1,0 +1,77 @@
+name: SIDI Cross Market Components
+
+on:
+  push:
+    branches: [sidi-cross-market-components]
+    paths:
+      - 'cross_market_component_backtest.py'
+      - '.github/workflows/sidi-cross-market-components.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  components:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile
+        run: python -m py_compile cross_market_component_backtest.py
+
+      - name: Run component study
+        run: python cross_market_component_backtest.py
+
+      - name: Validate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          root=Path('data/cross_market_components')
+          report=json.loads((root/'cross_market_components_report.json').read_text(encoding='utf-8'))
+          df=pd.read_csv(root/'cross_market_components_summary.csv')
+          assert report['model_version']=='SIDI_CROSS_MARKET_COMPONENTS_V1'
+          assert len(df)>=16
+          assert {'BASE','A','B','C','AB','AC','BC','ABC'}.issubset(set(df['config']))
+          print(df.to_string(index=False))
+          PY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidi-cross-market-components
+          path: data/cross_market_components/
+          retention-days: 30
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/cross-market-components
+          mkdir -p /tmp/cross-market-components
+          cp -a data/cross_market_components/. /tmp/cross-market-components/
+          git reset --hard HEAD
+          git clean -fd data/cross_market_components/ || true
+          git pull --rebase origin sidi-cross-market-components
+          mkdir -p data/cross_market_components
+          cp -a /tmp/cross-market-components/. data/cross_market_components/
+          git add data/cross_market_components/
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "backtest: store cross-market component results [skip actions]"
+            git push
+          fi
