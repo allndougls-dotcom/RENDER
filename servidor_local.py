@@ -993,6 +993,89 @@ def _string_list(value):
     return _split_pipe(value)
 
 
+
+WHITE_BIRD_RANGE_POS60_MIN = 0.088
+WHITE_BIRD_GAP_PCT_MIN = -0.17
+WHITE_BIRD_VOL_RATIO_MIN = 0.848
+WHITE_BIRD_VOL_RATIO_MAX = 1.0
+
+
+def _white_bird_metadata(position, technical, selection, full_setup, signal_close_usd, market_open_usd):
+    """Clasifica WHITE BIRD sin afectar la condición FULL principal."""
+    range_pos = _float(_first_value(
+        position.get("range_pos_60d"), position.get("range_pos60"),
+        technical.get("range_pos_60d"), technical.get("range_pos60"),
+        selection.get("range_pos_60d"), selection.get("range_pos60"),
+    ), None)
+    vol_ratio = _float(_first_value(
+        position.get("volume_ratio_5_60"),
+        technical.get("volume_ratio_5_60"),
+        selection.get("volume_ratio_5_60"),
+    ), None)
+
+    pass_a_raw = _first_value(
+        position.get("white_bird_pass_a"), selection.get("white_bird_pass_a")
+    )
+    pass_c_raw = _first_value(
+        position.get("white_bird_pass_c"), selection.get("white_bird_pass_c")
+    )
+    pass_a = _bool(pass_a_raw) if pass_a_raw is not None else (
+        range_pos is not None and range_pos >= WHITE_BIRD_RANGE_POS60_MIN
+    )
+    pass_c = _bool(pass_c_raw) if pass_c_raw is not None else (
+        vol_ratio is not None and
+        WHITE_BIRD_VOL_RATIO_MIN <= vol_ratio < WHITE_BIRD_VOL_RATIO_MAX
+    )
+
+    candidate_raw = _first_value(
+        position.get("white_bird_candidate"), selection.get("white_bird_candidate")
+    )
+    candidate = _bool(candidate_raw) if candidate_raw is not None else bool(
+        full_setup and pass_a and pass_c
+    )
+
+    gap_raw = _first_value(
+        position.get("white_bird_gap_pct"), selection.get("white_bird_gap_pct")
+    )
+    gap_pct = _float(gap_raw, None)
+    if gap_pct is None and signal_close_usd and market_open_usd:
+        gap_pct = (float(market_open_usd) / float(signal_close_usd) - 1.0) * 100.0
+
+    pass_b_raw = _first_value(
+        position.get("white_bird_pass_b"), selection.get("white_bird_pass_b")
+    )
+    b_known = pass_b_raw is not None or gap_pct is not None
+    pass_b = _bool(pass_b_raw) if pass_b_raw is not None else (
+        bool(gap_pct >= WHITE_BIRD_GAP_PCT_MIN) if gap_pct is not None else None
+    )
+
+    confirmed = bool(candidate and b_known and pass_b)
+    if not full_setup:
+        status = "NOT_FULL"
+    elif confirmed:
+        status = "CONFIRMED"
+    elif candidate and b_known and pass_b is False:
+        status = "REJECTED_B"
+    elif candidate:
+        status = "CANDIDATE"
+    else:
+        status = "STANDARD_FULL"
+
+    return {
+        "whiteBirdVersion": "WHITE_BIRD_V1",
+        "whiteBird": confirmed,
+        "whiteBirdCandidate": bool(candidate),
+        "whiteBirdStatus": status,
+        "whiteBirdPassA": bool(pass_a),
+        "whiteBirdPassB": pass_b,
+        "whiteBirdPassC": bool(pass_c),
+        "whiteBirdGapPct": gap_pct,
+        "rangePos60": range_pos,
+        "volumeRatio560": vol_ratio,
+        "setupTier": "WHITE_BIRD" if confirmed else ("FULL_SETUP" if full_setup else "NONE"),
+    }
+
+
 def _control_center_analysis(position, analysis_date):
     """Normaliza el JSON de ChatGPT Work al contrato interno del Control Center."""
     trade = position.get("trade_plan") if isinstance(position.get("trade_plan"), dict) else {}
@@ -1031,6 +1114,17 @@ def _control_center_analysis(position, analysis_date):
     full_setup = _bool(_first_value(
         position.get("full_setup"), position.get("sidi_full_setup"), selection.get("full_setup"),
     ))
+    signal_close_usd = _float(_first_value(
+        position.get("signal_close_usd"), technical.get("price"),
+    ), 0.0)
+    market_open_usd = _float(_first_value(
+        position.get("market_open_usd"), position.get("day_open"),
+        technical.get("day_open"),
+    ), 0.0)
+    white_bird = _white_bird_metadata(
+        position, technical, selection, full_setup, signal_close_usd, market_open_usd
+    )
+
     entry_reference_eur = _float(_first_value(
         trade.get("entry_reference_eur"), position.get("entry_reference_eur"),
         trade.get("entry_ideal_eur"), position.get("entry_ideal_eur"),
@@ -1051,8 +1145,8 @@ def _control_center_analysis(position, analysis_date):
         "subsector": str(position.get("subsector") or ""),
         "priceEur": price_eur,
         "priceUsd": price_usd,
-        "signalCloseUsd": _float(_first_value(position.get("signal_close_usd"), technical.get("price")), 0.0),
-        "marketOpenUsd": _float(_first_value(position.get("market_open_usd"), position.get("day_open")), 0.0),
+        "signalCloseUsd": signal_close_usd,
+        "marketOpenUsd": market_open_usd,
         "entryReferenceEur": entry_reference_eur,
         "entryReferenceUsd": entry_reference_usd,
         "actualFillEur": _float(_first_value(trade.get("actual_fill_eur"), position.get("actual_fill_eur")), 0.0),
@@ -1066,6 +1160,7 @@ def _control_center_analysis(position, analysis_date):
         "decision": str(position.get("decision") or ""),
         "strategyVersion": strategy_version,
         "fullSetup": full_setup,
+        **white_bird,
         "atr14Usd": atr_usd,
         "atr14Eur": atr_eur,
         "entryRule": str(_first_value(
