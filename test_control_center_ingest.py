@@ -379,3 +379,70 @@ def test_v7_cleanup_archives_old_active_state_and_keeps_a_backup():
         assert conn.execute("SELECT status FROM sidi_shadow_signals").fetchone()[0] == "INVALID_MIGRATED_V7"
     finally:
         server.get_turso_conn = original
+
+def test_white_bird_confirms_when_full_ac_and_opening_gap_passes_b():
+    position = _payload_v2("VALIDADA")["sidi_excel_payload"]["positions"][0]
+    position.update({
+        "full_setup": True,
+        "signal_close_usd": 100.0,
+        "market_open_usd": 99.9,  # -0.10%, passes B >= -0.17%
+        "white_bird_candidate": True,
+        "white_bird_pass_a": True,
+        "white_bird_pass_c": True,
+        "range_pos_60d": 0.12,
+        "volume_ratio_5_60": 0.90,
+    })
+    analysis = server._control_center_analysis(position, "2026-09-29")
+    assert analysis["fullSetup"] is True
+    assert analysis["whiteBirdCandidate"] is True
+    assert analysis["whiteBirdPassA"] is True
+    assert analysis["whiteBirdPassB"] is True
+    assert analysis["whiteBirdPassC"] is True
+    assert analysis["whiteBird"] is True
+    assert analysis["whiteBirdStatus"] == "CONFIRMED"
+    assert analysis["setupTier"] == "WHITE_BIRD"
+
+
+def test_white_bird_b_failure_keeps_original_full_operable():
+    position = _payload_v2("VALIDADA")["sidi_excel_payload"]["positions"][0]
+    position.update({
+        "full_setup": True,
+        "signal_close_usd": 100.0,
+        "market_open_usd": 99.5,  # -0.50%, fails B
+        "white_bird_candidate": True,
+        "white_bird_pass_a": True,
+        "white_bird_pass_c": True,
+        "range_pos_60d": 0.12,
+        "volume_ratio_5_60": 0.90,
+    })
+    analysis = server._control_center_analysis(position, "2026-09-29")
+    assert analysis["fullSetup"] is True
+    assert analysis["whiteBirdCandidate"] is True
+    assert analysis["whiteBirdPassB"] is False
+    assert analysis["whiteBird"] is False
+    assert analysis["whiteBirdStatus"] == "REJECTED_B"
+    assert analysis["setupTier"] == "FULL_SETUP"
+
+
+def test_white_bird_candidate_stays_pending_until_open_is_known():
+    position = _payload_v2("VALIDADA")["sidi_excel_payload"]["positions"][0]
+    position.update({
+        "full_setup": True,
+        "signal_close_usd": 100.0,
+        "white_bird": {
+            "candidate": True,
+            "pass_a": True,
+            "pass_b": None,
+            "pass_c": True,
+            "range_pos_60d": 0.12,
+            "volume_ratio_5_60": 0.90,
+        },
+    })
+    analysis = server._control_center_analysis(position, "2026-09-29")
+    assert analysis["fullSetup"] is True
+    assert analysis["whiteBirdCandidate"] is True
+    assert analysis["whiteBirdPassB"] is None
+    assert analysis["whiteBird"] is False
+    assert analysis["whiteBirdStatus"] == "CANDIDATE"
+    assert analysis["setupTier"] == "FULL_SETUP"
+
