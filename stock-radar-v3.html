@@ -2266,11 +2266,11 @@ function sortTable(col) {
 function renderStats() {
   const full = filteredData.filter(d => d.fullSetup === true);
   const fullNoWarn = full.filter(d => (d.warningCount || 0) === 0);
-  const technicalHot = filteredData.filter(d => d.setupHot === true);
+  const technicalHot = allData.filter(d => d.setupHot === true);
   const blockedByMarket = technicalHot.filter(d => d.fullSetup !== true && (d.sidiGateFailures || '').split('|').includes('SPY20'));
-  const missingContext = filteredData.filter(d => d.contextReady === false);
+  const missingContext = allData.filter(d => d.contextReady === false);
   const gates = ['DD12','RSI40','MACD','VOLUME','FUND65','SPY20','ABNORMAL20','CONTEXT_MISSING'];
-  const gateSummary = gates.map(g => g + ': ' + filteredData.filter(d => (d.sidiGateFailures || '').split('|').includes(g)).length).join(' · ');
+  const gateSummary = gates.map(g => g + ': ' + allData.filter(d => (d.sidiGateFailures || '').split('|').includes(g)).length).join(' · ');
   const avgScore = filteredData.length ? (filteredData.reduce((a,b) => a+b.score,0)/filteredData.length).toFixed(1) : 0;
   const avgDD = filteredData.length ? (filteredData.reduce((a,b) => a+b.drawdown60,0)/filteredData.length).toFixed(1) : 0;
   const warns = filteredData.filter(d => (d.warningCount || 0) > 0).length;
