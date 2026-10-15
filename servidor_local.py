@@ -1002,22 +1002,27 @@ WHITE_BIRD_VOL_RATIO_MAX = 1.0
 
 def _white_bird_metadata(position, technical, selection, full_setup, signal_close_usd, market_open_usd):
     """Clasifica WHITE BIRD sin afectar la condición FULL principal."""
+    wb = position.get("white_bird") if isinstance(position.get("white_bird"), dict) else {}
     range_pos = _float(_first_value(
         position.get("range_pos_60d"), position.get("range_pos60"),
         technical.get("range_pos_60d"), technical.get("range_pos60"),
         selection.get("range_pos_60d"), selection.get("range_pos60"),
+        wb.get("range_pos_60d"), wb.get("range_pos60"),
     ), None)
     vol_ratio = _float(_first_value(
         position.get("volume_ratio_5_60"),
         technical.get("volume_ratio_5_60"),
         selection.get("volume_ratio_5_60"),
+        wb.get("volume_ratio_5_60"),
     ), None)
 
     pass_a_raw = _first_value(
-        position.get("white_bird_pass_a"), selection.get("white_bird_pass_a")
+        position.get("white_bird_pass_a"), selection.get("white_bird_pass_a"),
+        wb.get("pass_a")
     )
     pass_c_raw = _first_value(
-        position.get("white_bird_pass_c"), selection.get("white_bird_pass_c")
+        position.get("white_bird_pass_c"), selection.get("white_bird_pass_c"),
+        wb.get("pass_c")
     )
     pass_a = _bool(pass_a_raw) if pass_a_raw is not None else (
         range_pos is not None and range_pos >= WHITE_BIRD_RANGE_POS60_MIN
@@ -1028,21 +1033,24 @@ def _white_bird_metadata(position, technical, selection, full_setup, signal_clos
     )
 
     candidate_raw = _first_value(
-        position.get("white_bird_candidate"), selection.get("white_bird_candidate")
+        position.get("white_bird_candidate"), selection.get("white_bird_candidate"),
+        wb.get("candidate")
     )
     candidate = _bool(candidate_raw) if candidate_raw is not None else bool(
         full_setup and pass_a and pass_c
     )
 
     gap_raw = _first_value(
-        position.get("white_bird_gap_pct"), selection.get("white_bird_gap_pct")
+        position.get("white_bird_gap_pct"), selection.get("white_bird_gap_pct"),
+        wb.get("gap_pct")
     )
     gap_pct = _float(gap_raw, None)
     if gap_pct is None and signal_close_usd and market_open_usd:
         gap_pct = (float(market_open_usd) / float(signal_close_usd) - 1.0) * 100.0
 
     pass_b_raw = _first_value(
-        position.get("white_bird_pass_b"), selection.get("white_bird_pass_b")
+        position.get("white_bird_pass_b"), selection.get("white_bird_pass_b"),
+        wb.get("pass_b")
     )
     b_known = pass_b_raw is not None or gap_pct is not None
     pass_b = _bool(pass_b_raw) if pass_b_raw is not None else (
