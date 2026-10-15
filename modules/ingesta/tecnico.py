@@ -121,7 +121,12 @@ def calcular_tecnicos(all_prices: dict) -> pd.DataFrame:
             ma200_sl = (ma200 - ma200_prev) / ma200_prev * 100 if not np.isnan(ma200_prev) else np.nan
 
             high60_close = float(c.iloc[-60:].max()) if n >= 60 else float(c.max())
+            low60_close = float(c.iloc[-60:].min()) if n >= 60 else float(c.min())
             high60_intraday = float(h.iloc[-60:].max()) if n >= 60 else float(h.max())
+            range_pos60 = (
+                (price - low60_close) / (high60_close - low60_close)
+                if high60_close > low60_close else np.nan
+            )
             dd60 = (price - high60_close) / high60_close * 100
             dd60_legacy_high = (price - high60_intraday) / high60_intraday * 100
             h52 = h.iloc[-252:].max() if n >= 252 else h.max()
@@ -129,7 +134,10 @@ def calcular_tecnicos(all_prices: dict) -> pd.DataFrame:
 
             va20 = v.iloc[-20:].mean() if n >= 20 else v.mean()
             vr = v.iloc[-1] / va20 if va20 > 0 else 1.0
-            vdec = bool(v.iloc[-5:].mean() < v.iloc[-60:].mean()) if n >= 60 else False
+            vol5_avg = float(v.iloc[-5:].mean()) if n >= 5 else float(v.mean())
+            vol60_avg = float(v.iloc[-60:].mean()) if n >= 60 else float(v.mean())
+            volume_ratio_5_60 = vol5_avg / vol60_avg if vol60_avg > 0 else np.nan
+            vdec = bool(vol5_avg < vol60_avg) if n >= 60 else False
             vdec_legacy = bool(v.iloc[-5:].mean() < v.iloc[-60:-5].mean()) if n >= 65 else False
 
             s1p, r1p, s1s, r1s = _find_sr(df)
@@ -197,12 +205,17 @@ def calcular_tecnicos(all_prices: dict) -> pd.DataFrame:
                 "drawdown_60d": round(dd60, 2),
                 "drawdown_60d_legacy_high": round(dd60_legacy_high, 2),
                 "high_60d_close": round(high60_close, 2),
+                "low_60d_close": round(low60_close, 2),
+                "range_pos_60d": round(range_pos60, 6) if not np.isnan(range_pos60) else np.nan,
                 "high_60d": round(high60_intraday, 2),
                 "high_52w": round(h52, 2),
                 "low_52w": round(l52, 2),
                 "pct_from_52w_high": round((price / h52 - 1) * 100, 2),
                 "pct_from_52w_low": round((price / l52 - 1) * 100, 2),
                 "volume_ratio_20d": round(vr, 3),
+                "volume_avg_5d": round(vol5_avg, 2),
+                "volume_avg_60d": round(vol60_avg, 2),
+                "volume_ratio_5_60": round(volume_ratio_5_60, 6) if not np.isnan(volume_ratio_5_60) else np.nan,
                 "volume_decreasing": vdec,
                 "volume_decreasing_legacy": vdec_legacy,
                 "support_1_price": round(s1p, 2) if not np.isnan(s1p) else np.nan,
