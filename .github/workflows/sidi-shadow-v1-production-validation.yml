@@ -2,7 +2,7 @@ name: SIDI Intraday V2 Production Validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, sidi-white-bird]
     paths:
       - 'main_ingesta.py'
       - 'servidor_local.py'
@@ -85,7 +85,11 @@ jobs:
             'legacy_full_setup','sidi_gate_failures','sidi_strategy_version','sidi_entry_rule','sidi_tp_atr_mult',
             'sidi_sl_pct','sidi_time_stop_sessions','sidi_risk_pct','sidi_max_positions',
             'sidi_tp1_atr_mult','sidi_tp2_atr_mult','sidi_partial_exit_rule','sidi_after_tp1_stop_rule',
-            'sidi_gap_stop_rule','sidi_intraday_conflict_rule'
+            'sidi_gap_stop_rule','sidi_intraday_conflict_rule',
+            'range_pos_60d','volume_ratio_5_60',
+            'white_bird_version','white_bird_pass_a','white_bird_pass_b',
+            'white_bird_pass_c','white_bird_candidate','white_bird_confirmed',
+            'white_bird_status','sidi_setup_tier'
           }
           missing = sorted(required-set(df.columns)); assert not missing, missing
           assert set(df.sidi_strategy_version.dropna().astype(str)) == {'SIDI_INTRADAY_V2'}
@@ -107,6 +111,19 @@ jobs:
           actual=b(df.full_setup)
           assert (actual==expected).all()
           assert (b(df.sidi_full_setup)==actual).all()
+          wb_a = pd.to_numeric(df.range_pos_60d, errors='coerce') >= 0.088
+          wb_c_ratio = pd.to_numeric(df.volume_ratio_5_60, errors='coerce')
+          wb_c = (wb_c_ratio >= 0.848) & (wb_c_ratio < 1.0)
+          wb_candidate = actual & wb_a.fillna(False) & wb_c.fillna(False)
+          assert (b(df.white_bird_pass_a)==wb_a.fillna(False)).all()
+          assert (b(df.white_bird_pass_c)==wb_c.fillna(False)).all()
+          assert (b(df.white_bird_candidate)==wb_candidate).all()
+          assert not b(df.white_bird_confirmed).any(), 'B must not be pre-confirmed at signal close'
+          candidate_status = df.loc[wb_candidate, 'white_bird_status'].astype(str)
+          assert (candidate_status == 'CANDIDATE').all()
+          standard_status = df.loc[actual & ~wb_candidate, 'white_bird_status'].astype(str)
+          assert (standard_status == 'STANDARD_FULL').all()
+          assert set(df.white_bird_version.dropna().astype(str)) == {'WHITE_BIRD_V1'}
           ready=int(b(df.sidi_context_ready).sum()); assert ready>0
           full=df[actual]
           if len(full):
@@ -115,7 +132,7 @@ jobs:
             assert (pd.to_numeric(full.rsi_14)<40).all()
             assert (pd.to_numeric(full.spy_return_20d)<=1).all()
             assert (pd.to_numeric(full.abnormal_return_20d)<=-10).all()
-          print(f'OK production: {len(df)} rows, {ready} context-ready, {len(full)} FULL')
+          print(f'OK production: {len(df)} rows, {ready} context-ready, {len(full)} FULL, {int(wb_candidate.sum())} WHITE BIRD candidates')
           PY
       - uses: actions/upload-artifact@v4
         if: github.event_name != 'pull_request'
