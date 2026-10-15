@@ -41,6 +41,15 @@ SIDI_MIN_FUND_SCORE = 6.5
 SIDI_MAX_SPY20 = 1.0
 SIDI_MAX_ABNORMAL20 = -10.0
 
+# WHITE BIRD V1: capa premium sobre una FULL existente.
+# A y C se conocen al cierre de la señal. B (gap de apertura siguiente)
+# se confirma después, por lo que en el Master CSV sólo se marca CANDIDATE.
+WHITE_BIRD_VERSION = "WHITE_BIRD_V1"
+WHITE_BIRD_RANGE_POS60_MIN = 0.088
+WHITE_BIRD_GAP_PCT_MIN = -0.17
+WHITE_BIRD_VOL_RATIO_MIN = 0.848
+WHITE_BIRD_VOL_RATIO_MAX = 1.0
+
 SCORE_COLS = ["revenue_growth", "eps_growth", "roe", "debt_equity", "pe", "pb", "current_ratio"]
 
 
@@ -166,6 +175,37 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
         df["sidi_pass_spy20"] & df["sidi_pass_abnormal20"]
     )
     df["sidi_full_setup"] = df["full_setup"]
+
+    range_pos60 = pd.to_numeric(
+        df.get("range_pos_60d", pd.Series(np.nan, index=df.index)), errors="coerce"
+    )
+    vol_ratio_5_60 = pd.to_numeric(
+        df.get("volume_ratio_5_60", pd.Series(np.nan, index=df.index)), errors="coerce"
+    )
+    df["white_bird_version"] = WHITE_BIRD_VERSION
+    df["white_bird_pass_a"] = range_pos60 >= WHITE_BIRD_RANGE_POS60_MIN
+    df["white_bird_pass_c"] = (
+        (vol_ratio_5_60 >= WHITE_BIRD_VOL_RATIO_MIN) &
+        (vol_ratio_5_60 < WHITE_BIRD_VOL_RATIO_MAX)
+    )
+    # B depende del gap de la siguiente apertura y aún no existe en T close.
+    df["white_bird_pass_b"] = pd.Series(pd.NA, index=df.index, dtype="boolean")
+    df["white_bird_gap_pct"] = np.nan
+    df["white_bird_candidate"] = (
+        df["full_setup"] &
+        df["white_bird_pass_a"].fillna(False).astype(bool) &
+        df["white_bird_pass_c"].fillna(False).astype(bool)
+    )
+    df["white_bird_confirmed"] = False
+    df["white_bird_status"] = np.where(
+        df["white_bird_candidate"], "CANDIDATE",
+        np.where(df["full_setup"], "STANDARD_FULL", "NOT_FULL")
+    )
+    df["sidi_setup_tier"] = np.where(
+        df["white_bird_candidate"], "WHITE_BIRD_CANDIDATE",
+        np.where(df["full_setup"], "FULL_SETUP", "NONE")
+    )
+
     df["sidi_gate_failures"] = df.apply(_gate_failures, axis=1)
     # Diagnostico transparente: nunca relajar puertas de la estrategia congelada.
     diag_gates = ["DD12", "RSI40", "MACD", "VOLUME", "FUND65", "SPY20", "ABNORMAL20", "CONTEXT_MISSING"]
@@ -177,6 +217,7 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
     print(
         f"  SIDI funnel: tecnico={int(df['setup_hot'].sum())} · "
         f"FULL={int(df['full_setup'].sum())} · "
+        f"WHITE BIRD candidates={int(df['white_bird_candidate'].sum())} · "
         f"bloqueados SPY20={int((df['setup_hot'] & ~df['sidi_pass_spy20']).sum())} · "
         f"contexto incompleto={int((~df['sidi_context_ready'].fillna(False).astype(bool)).sum())}"
     )
@@ -208,7 +249,10 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
         })
     df = pd.concat([df, df.apply(_sector_ctx, axis=1)], axis=1)
     df = add_indicative_trade_plan(df)
-    df = df.sort_values(["full_setup", "combined_score"], ascending=[False, False]).reset_index(drop=True)
+    df = df.sort_values(
+        ["white_bird_candidate", "full_setup", "combined_score"],
+        ascending=[False, False, False]
+    ).reset_index(drop=True)
 
     setups = int(df["full_setup"].sum())
     legacy_setups = int(df["legacy_full_setup"].sum())
@@ -216,6 +260,7 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
     print(f"     Score combinado medio : {df['combined_score'].mean():.2f}/10")
     print(f"     Fund score medio      : {df['fund_score'].mean():.2f}/10")
     print(f"     FULL Intraday V2        : {setups}")
+    print(f"     WHITE BIRD candidates   : {int(df['white_bird_candidate'].sum())}")
     print(f"     FULL legacy (audit)   : {legacy_setups}")
     cols = ["ticker", "sector", "fund_score", "combined_score", "drawdown_60d", "rsi_14", "spy_return_20d", "abnormal_return_20d"]
     cols = [c for c in cols if c in df.columns]
