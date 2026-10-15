@@ -2266,6 +2266,11 @@ function sortTable(col) {
 function renderStats() {
   const full = filteredData.filter(d => d.fullSetup === true);
   const fullNoWarn = full.filter(d => (d.warningCount || 0) === 0);
+  const technicalHot = allData.filter(d => d.setupHot === true);
+  const blockedByMarket = technicalHot.filter(d => d.fullSetup !== true && (d.sidiGateFailures || '').split('|').includes('SPY20'));
+  const missingContext = allData.filter(d => d.contextReady === false);
+  const gates = ['DD12','RSI40','MACD','VOLUME','FUND65','SPY20','ABNORMAL20','CONTEXT_MISSING'];
+  const gateSummary = gates.map(g => g + ': ' + allData.filter(d => (d.sidiGateFailures || '').split('|').includes(g)).length).join(' · ');
   const avgScore = filteredData.length ? (filteredData.reduce((a,b) => a+b.score,0)/filteredData.length).toFixed(1) : 0;
   const avgDD = filteredData.length ? (filteredData.reduce((a,b) => a+b.drawdown60,0)/filteredData.length).toFixed(1) : 0;
   const warns = filteredData.filter(d => (d.warningCount || 0) > 0).length;
@@ -2283,7 +2288,10 @@ function renderStats() {
 
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card green"><div class="stat-label">Empresas filtradas</div><div class="stat-val" style="color:var(--green)">${filteredData.length}</div><div class="stat-sub">de ${allData.length} en universo</div></div>
-    <div class="stat-card amber"><div class="stat-label">FULL SIDI V1</div><div class="stat-val" style="color:var(--amber)">${full.length}</div><div class="stat-sub">7 puertas congeladas</div></div>
+    <div class="stat-card amber"><div class="stat-label">FULL SIDI V2</div><div class="stat-val" style="color:var(--amber)">${full.length}</div><div class="stat-sub">7 puertas congeladas</div></div>
+    <div class="stat-card green"><div class="stat-label">HOT técnicos</div><div class="stat-val" style="color:var(--green)">${technicalHot.length}</div><div class="stat-sub">antes del filtro de mercado</div></div>
+    <div class="stat-card amber"><div class="stat-label">HOT bloqueados por SPY20</div><div class="stat-val" style="color:var(--amber)">${blockedByMarket.length}</div><div class="stat-sub">régimen no apto para FULL</div></div>
+    <div class="stat-card red"><div class="stat-label">Contexto incompleto</div><div class="stat-val" style="color:var(--red)">${missingContext.length}</div><div class="stat-sub" title="${gateSummary}">Por filtro: ${gateSummary}</div></div>
     <div class="stat-card blue"><div class="stat-label">Score Promedio</div><div class="stat-val" style="color:var(--blue)">${avgScore}</div><div class="stat-sub">sobre 10</div></div>
     <div class="stat-card purple"><div class="stat-label">Drawdown Medio</div><div class="stat-val" style="color:var(--purple)">${avgDD}%</div><div class="stat-sub">caída desde máx 60d</div></div>
     <div class="stat-card red"><div class="stat-label">Con Warnings</div><div class="stat-val" style="color:var(--red)">${warns}</div><div class="stat-sub">revisar antes de operar</div></div>
@@ -2632,13 +2640,13 @@ function renderScatter() {
   const ctx = document.getElementById('scatterChart').getContext('2d');
   const datasets = [
     {
-      label: 'HOT (Score≥6, DD≥8%, RSI<40)',
-      data: allData.filter(d=>d.score>=6&&d.drawdown60>=8&&d.rsi<40).map(d=>({x:d.score,y:d.drawdown60,label:d.ticker})),
+      label: 'HOT técnico (SIDI_INTRADAY_V2)',
+      data: allData.filter(d=>d.setupHot === true).map(d=>({x:d.score,y:d.drawdown60,label:d.ticker})),
       backgroundColor: 'rgba(74,222,128,0.8)', pointRadius: 6
     },
     {
       label: 'WATCH',
-      data: allData.filter(d=>d.score>=6&&d.drawdown60>=8&&d.rsi>=40).map(d=>({x:d.score,y:d.drawdown60,label:d.ticker})),
+      data: allData.filter(d=>d.setupHot !== true && d.fullSetup !== true && d.drawdown60>=12 && d.score>=6.5).map(d=>({x:d.score,y:d.drawdown60,label:d.ticker})),
       backgroundColor: 'rgba(245,158,11,0.7)', pointRadius: 5
     },
     {
@@ -5635,9 +5643,10 @@ function exportExcel() {
     'Rev Growth %': d.revenueGrowth, 'EPS Growth %': d.epsGrowth,
     'Deuda/Equity': d.debtEquity, ROE: d.roe,
     Warnings: Array.isArray(d.warnings) ? d.warnings.join('; ') : (d.warnings || 'OK'),
-    Setup: d.drawdown60>=8 && d.score>=6 && d.rsi<40 ? 'HOT' : d.drawdown60>=8 && d.score>=6 ? 'WATCH' : '—',
-    'Target (+6.5%)': (d.price * 1.065).toFixed(2),
-    'Stop (-5%)':     (d.price * 0.95).toFixed(2),
+    Setup: d.fullSetup ? 'FULL V2' : d.setupHot ? 'HOT TÉCNICO' : d.drawdown60>=12 && d.score>=6.5 ? 'WATCH' : '—',
+    'Fallos filtros V2': d.sidiGateFailures || '',
+    'Target indicativo (+6.5%, legado)': (d.price * 1.065).toFixed(2),
+    'Stop indicativo (-5%)': (d.price * 0.95).toFixed(2),
     Horizonte: d.horizon || '',
   }));
 

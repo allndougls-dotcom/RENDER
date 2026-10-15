@@ -167,6 +167,22 @@ def calcular_scores(sp500: pd.DataFrame, df_tech: pd.DataFrame, df_fund: pd.Data
     )
     df["sidi_full_setup"] = df["full_setup"]
     df["sidi_gate_failures"] = df.apply(_gate_failures, axis=1)
+    # Diagnostico transparente: nunca relajar puertas de la estrategia congelada.
+    diag_gates = ["DD12", "RSI40", "MACD", "VOLUME", "FUND65", "SPY20", "ABNORMAL20", "CONTEXT_MISSING"]
+    gate_counts = {
+        gate: int(df["sidi_gate_failures"].str.split("|", regex=False).apply(lambda failures: gate in failures).sum())
+        for gate in diag_gates
+    }
+    print("  SIDI gates: " + " · ".join(f"{gate}={count}" for gate, count in gate_counts.items()))
+    print(
+        f"  SIDI funnel: tecnico={int(df['setup_hot'].sum())} · "
+        f"FULL={int(df['full_setup'].sum())} · "
+        f"bloqueados SPY20={int((df['setup_hot'] & ~df['sidi_pass_spy20']).sum())} · "
+        f"contexto incompleto={int((~df['sidi_context_ready'].fillna(False).astype(bool)).sum())}"
+    )
+    if not bool(df["sidi_context_ready"].fillna(False).all()):
+        print("::warning::SIDI: hay empresas sin contexto SPY/sector. Revisar benchmarks y cobertura.")
+
 
     legacy_sector_ok = ~df.get("sector", pd.Series("", index=df.index)).isin(["Financials", "Communication Services"])
     df["legacy_full_setup"] = (
