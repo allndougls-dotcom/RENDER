@@ -9,7 +9,7 @@ on:
       limit:
         description: 'Max companies to fetch for coverage pilot'
         required: true
-        default: '20'
+        default: '50'
 permissions:
   contents: read
 jobs:
@@ -29,15 +29,20 @@ jobs:
             echo "::error::Configure secret SEC_USER_AGENT with your real contact email before running this research workflow."
             exit 1
           fi
+      - name: Build CIK universe from latest SIDI master
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          python research/build_sec_universe.py --user-agent "$SEC_USER_AGENT"
       - name: SEC point-in-time pilot
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
-          python research/sec_pit_batch.py --universe-csv research/quality_pit_universe.csv --asof "${{ inputs.asof }}" --limit "${{ inputs.limit }}"
+          python research/sec_pit_batch.py --universe-csv results/quality_swing/sec_universe.csv --asof "${{ inputs.asof }}" --limit "${{ inputs.limit }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: quality-sec-pit-coverage
-          path: results/quality_swing/sec_pit/
+          path: results/quality_swing/
           if-no-files-found: warn
           retention-days: 30
