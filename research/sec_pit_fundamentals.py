@@ -11,13 +11,13 @@ TAGS = {
  "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax","RevenueFromContractWithCustomerIncludingAssessedTax","Revenues","SalesRevenueNet","SalesRevenueGoodsNet"],
  "net_income": ["NetIncomeLoss","ProfitLoss"],
  "assets": ["Assets"],
- "liabilities": ["Liabilities","LiabilitiesAndStockholdersEquity"],
+ "liabilities": ["Liabilities"],
  "equity": ["StockholdersEquity","StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
  "current_assets": ["AssetsCurrent"],
  "current_liabilities": ["LiabilitiesCurrent"],
  "operating_cashflow": ["NetCashProvidedByUsedInOperatingActivities"],
- "capex": ["PaymentsToAcquirePropertyPlantAndEquipment","PaymentsForProceedsFromOtherInvestingActivities"],
- "shares": ["CommonStockSharesOutstanding","CommonStockSharesIssued"],
+ "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
+ "shares": ["CommonStockSharesOutstanding"],
 }
 def get(url,agent):
     req=urllib.request.Request(url,headers={"User-Agent":agent,"Accept":"application/json"})
