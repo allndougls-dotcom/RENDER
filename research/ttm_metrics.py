@@ -20,11 +20,12 @@ def compute(d):
     equity=f("equity")
     capex=ttm["capex"]
     ocf=ttm["operating_cashflow"]
-    fcf=ocf-capex if ocf is not None and capex is not None else None
+    same_end=(d.get("ttm",{}).get("operating_cashflow") or {}).get("period_end")== (d.get("ttm",{}).get("capex") or {}).get("period_end")
+    fcf=ocf-capex if ocf is not None and capex is not None and same_end else None
     ratios={
       "fcf_ttm":fcf,
-      "fcf_ni_ratio_ttm":safe_div(fcf,ttm["net_income"]),
-      "net_margin_ttm":safe_div(ttm["net_income"],ttm["revenue"]),
+      "fcf_ni_ratio_ttm":safe_div(fcf,ttm["net_income"]) if (d.get("ttm",{}).get("net_income") or {}).get("period_end")== (d.get("ttm",{}).get("operating_cashflow") or {}).get("period_end") else None,
+      "net_margin_ttm":safe_div(ttm["net_income"],ttm["revenue"]) if (d.get("ttm",{}).get("net_income") or {}).get("period_end")== (d.get("ttm",{}).get("revenue") or {}).get("period_end") else None,
       "roe_ttm_over_latest_equity_proxy":safe_div(ttm["net_income"],equity),
       "current_ratio":safe_div(f("current_assets"),f("current_liabilities")),
       "liabilities_to_equity_proxy":safe_div(f("liabilities"),equity),
