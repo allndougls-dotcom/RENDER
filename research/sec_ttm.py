@@ -2,7 +2,7 @@
 Use annual duration 330-380 days, or four *standalone* quarters 70-110 days.
 YTD cumulative SEC facts are NOT summed as quarters.
 """
-from datetime import date
+from datetime import date, timedelta
 from math import isfinite
 
 def observations(facts,tags,asof):
@@ -37,10 +37,8 @@ def latest_ttm(records):
     for last in quarters:
         chosen=[last]
         for _ in range(3):
-            earlier=[x for x in quarters if 65<=(chosen[-1]["start"]-x["end"]).days+1<=75]
-            # Correction: contiguous quarters normally have start=prior end+1;
-            # require strict adjacency to avoid silently missing fiscal quarters.
-            earlier=[x for x in quarters if x["end"]+__import__("datetime").timedelta(days=1)==chosen[-1]["start"]]
+            # Fiscal quarters must be contiguous; never invent a missing quarter.
+            earlier=[x for x in quarters if x["end"]+timedelta(days=1)==chosen[-1]["start"]]
             if not earlier:break
             chosen.append(max(earlier,key=lambda x:x["end"]))
         if len(chosen)==4 and 330<=(last["end"]-chosen[-1]["start"]).days<=380:
