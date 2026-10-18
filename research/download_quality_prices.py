@@ -11,10 +11,12 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--snapshots",default="data/master")
     ap.add_argument("--prices",default="data/backtest_prices")
-    ap.add_argument("--years",type=int,default=5)
+    ap.add_argument("--years",type=int,default=10)
+    ap.add_argument("--universe-csv",default=None)
     args=ap.parse_args()
     names=set()
-    for snapshot in Path(args.snapshots).glob("sp500_full_export_*.csv"):
+    source_files=[Path(args.universe_csv)] if args.universe_csv else list(Path(args.snapshots).glob("sp500_full_export_*.csv"))
+    for snapshot in source_files:
         with snapshot.open(encoding="utf-8-sig",newline="") as f:
             for row in csv.DictReader(f):
                 tick=(row.get("ticker") or "").strip().upper()
