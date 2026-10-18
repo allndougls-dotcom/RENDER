@@ -38,6 +38,10 @@ jobs:
         run: python research/test_sec_pit.py
       - name: Test historical ratio reconstruction
         run: python research/test_pit_ratios.py
+      - name: Test point-in-time TTM and score eligibility
+        run: |
+          python research/test_sec_ttm.py
+          python research/test_score_readiness.py
       - name: SEC point-in-time pilot
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
@@ -45,6 +49,8 @@ jobs:
           python research/sec_pit_batch.py --universe-csv results/quality_swing/sec_universe.csv --asof "${{ inputs.asof }}" --limit "${{ inputs.limit }}"
       - name: Summarize historical ratio coverage
         run: python research/pit_ratios.py
+      - name: Audit historical score readiness
+        run: python research/score_readiness.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
