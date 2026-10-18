@@ -21,6 +21,7 @@ def audit(records):
         result["not_ready"]+=1
         result["not_comparable"].append({"ticker":ticker,"missing":missing})
         for field in missing: result["missing"][field]=result["missing"].get(field,0)+1
+    result["ttm_coverage"]={k:sum(d.get("ttm",{}).get(k) is not None for d in records) for k in ("revenue","net_income","operating_cashflow","capex")}
     result["quality_gt_8_5_count"]=None
     result["valid_backtest_signals"]=0
     result["warning"]="No reconstruction of exact scores. SEC PIT raw statements are not sufficient for a valid historical SIDI combined score."
