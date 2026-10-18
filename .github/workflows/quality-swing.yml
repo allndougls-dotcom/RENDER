@@ -1,0 +1,67 @@
+name: SIDI Quality Swing research
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 'Years of adjusted OHLCV prices (only forward of dated signals is used)'
+        required: false
+        default: '5'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/quality-swing.yml'
+permissions:
+  contents: read
+jobs:
+  quality-swing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install research dependencies
+        run: python -m pip install pandas numpy yfinance
+      - name: Check dated snapshot coverage
+        id: coverage
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, os
+          dates=sorted([p.stem.removeprefix('sp500_full_export_') for p in Path('data/master').glob('sp500_full_export_*.csv') if re.fullmatch(r'sp500_full_export_\d{8}',p.stem)])
+          print("Dated snapshot dates:",dates)
+          with open(os.environ["GITHUB_OUTPUT"],'a') as fh:fh.write(f"count={len(dates)}\n")
+          PY
+      - name: Download adjusted daily bars
+        if: steps.coverage.outputs.count != '0'
+        run: python research/download_quality_prices.py --years ${{ inputs.years || '5' }}
+      - name: Execute isolated research
+        run: python research/quality_swing.py --prices data/backtest_prices --snapshots data/master --out results/quality_swing
+      - name: Write eligibility note
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv,json,pathlib
+          p=pathlib.Path('results/quality_swing')
+          cov=json.loads((p/'coverage.json').read_text())
+          summary=list(csv.DictReader((p/'summary.csv').open())) if (p/'summary.csv').exists() else []
+          nsignals=cov.get('signals_eligible',0)
+          counts=[int(r['n']) for r in summary]
+          ready=bool(summary) and min(counts)>=30
+          note={'experiment':'QUALITY SWING - exploratory ONLY','eligible_signals':nsignals,
+                'minimum_per_arm':min(counts) if counts else 0,
+                'publishable_win_rates':ready,
+                'warning':'Results are exploratory, require non-overlapping point-in-time scores, enough forward history and out-of-sample validation. Historical membership may suffer survivorship bias.'}
+          (p/'eligibility.json').write_text(json.dumps(note,indent=2))
+          print(json.dumps(note,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-swing-results
+          path: results/quality_swing/
+          if-no-files-found: warn
+          retention-days: 30
