@@ -54,7 +54,7 @@ jobs:
       - name: Compute aligned historical TTM ratios
         run: python research/ttm_metrics.py
       - name: Install OHLCV dependencies
-        run: python -m pip install pandas numpy yfinance
+        run: python -m pip install pandas numpy yfinance tqdm
       - name: Download historical bars for SEC pilot universe
         run: python research/download_quality_prices.py --universe-csv results/quality_swing/sec_universe.csv --prices data/backtest_prices --years 10 --limit "${{ inputs.limit }}"
       - name: Reconstruct dated technical gates
