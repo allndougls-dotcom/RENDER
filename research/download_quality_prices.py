@@ -11,17 +11,24 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--snapshots",default="data/master")
     ap.add_argument("--prices",default="data/backtest_prices")
-    ap.add_argument("--years",type=int,default=5)
+    ap.add_argument("--years",type=int,default=10)
+    ap.add_argument("--universe-csv",default=None)
+    ap.add_argument("--limit",type=int,default=None)
     args=ap.parse_args()
-    names=set()
-    for snapshot in Path(args.snapshots).glob("sp500_full_export_*.csv"):
+    names=[]
+    seen=set()
+    source_files=[Path(args.universe_csv)] if args.universe_csv else list(Path(args.snapshots).glob("sp500_full_export_*.csv"))
+    for snapshot in source_files:
         with snapshot.open(encoding="utf-8-sig",newline="") as f:
             for row in csv.DictReader(f):
                 tick=(row.get("ticker") or "").strip().upper()
-                if tick:names.add(tick)
+                if tick and tick not in seen:
+                    names.append(tick)
+                    seen.add(tick)
     target=Path(args.prices);target.mkdir(parents=True,exist_ok=True)
     successes=0;fails=[]
-    for index,ticker in enumerate(sorted(names),1):
+    selected=names[:args.limit] if args.limit else names
+    for index,ticker in enumerate(selected,1):
         output=target/f"{ticker}.csv"
         if output.is_file():successes+=1;continue
         try:
@@ -36,7 +43,7 @@ def main():
             successes+=1
         except Exception as exc:
             fails.append((ticker,str(exc)[:100]))
-        if index%20==0:print(f"{index}/{len(names)} downloaded or cached; failed {len(fails)}",flush=True)
+        if index%20==0:print(f"{index}/{len(selected)} downloaded or cached; failed {len(fails)}",flush=True)
         time.sleep(.3)
     print(f"PRICE COVERAGE: {successes}/{len(names)}; failed {len(fails)}")
     if fails:

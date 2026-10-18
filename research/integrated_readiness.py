@@ -4,6 +4,7 @@ A diagnostic integration, NOT a historical combined score. Never backfill today'
 scores, medians, or valuations. A missing component stays null.
 """
 import argparse,csv,json
+from datetime import date
 from pathlib import Path
 from ttm_metrics import compute
 
@@ -20,7 +21,10 @@ def audit(in_dir,tech_dir,asof):
         if technical.exists():
             with technical.open(newline="",encoding="utf-8") as fh:
                 prior=[row for row in csv.DictReader(fh) if row.get("Date","")[:10]<=asof]
-            if prior:tech=prior[-1]
+            if prior:
+                candidate=prior[-1]
+                age=(date.fromisoformat(asof)-date.fromisoformat(candidate["Date"][:10])).days
+                if 0<=age<=7:tech=candidate
         checks={
           "ttm_revenue":metrics["ttm"]["revenue"] is not None,
           "ttm_net_income":metrics["ttm"]["net_income"] is not None,
