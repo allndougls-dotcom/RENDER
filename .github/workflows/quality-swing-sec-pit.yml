@@ -1,0 +1,43 @@
+name: QUALITY SWING SEC PIT research
+on:
+  workflow_dispatch:
+    inputs:
+      asof:
+        description: 'Historical as-of date (YYYY-MM-DD)'
+        required: true
+        default: '2024-06-28'
+      limit:
+        description: 'Max companies to fetch for coverage pilot'
+        required: true
+        default: '20'
+permissions:
+  contents: read
+jobs:
+  sec-pit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate SEC contact configuration
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          if [ -z "$SEC_USER_AGENT" ]; then
+            echo "::error::Configure secret SEC_USER_AGENT with your real contact email before running this research workflow."
+            exit 1
+          fi
+      - name: SEC point-in-time pilot
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          python research/sec_pit_batch.py --universe-csv research/quality_pit_universe.csv --asof "${{ inputs.asof }}" --limit "${{ inputs.limit }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-sec-pit-coverage
+          path: results/quality_swing/sec_pit/
+          if-no-files-found: warn
+          retention-days: 30
