@@ -42,6 +42,8 @@ jobs:
         run: |
           python research/test_sec_ttm.py
           python research/test_score_readiness.py
+      - name: Test point-in-time annual growth
+        run: python research/test_annual_growth_pit.py
       - name: SEC point-in-time pilot
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}

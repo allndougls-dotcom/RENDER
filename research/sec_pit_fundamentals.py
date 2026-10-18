@@ -7,6 +7,7 @@ Se requiere --user-agent con contacto real SEC, o variable SEC_USER_AGENT.
 import argparse,json,os,urllib.request
 from datetime import date
 from sec_ttm import observations, latest_ttm
+from annual_growth_pit import annual_growth
 
 TAGS = {
  "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax","RevenueFromContractWithCustomerIncludingAssessedTax","Revenues","SalesRevenueNet","SalesRevenueGoodsNet"],
@@ -57,8 +58,10 @@ def snapshot(cik,asof,agent):
     ttm_tags={"revenue":TAGS["revenue"],"net_income":TAGS["net_income"],
               "operating_cashflow":TAGS["operating_cashflow"],"capex":TAGS["capex"]}
     ttm={name:latest_ttm(observations(facts["facts"],tags,asof)) for name,tags in ttm_tags.items()}
+    growth={"revenue_annual":annual_growth(facts["facts"],TAGS["revenue"],asof),
+            "net_income_annual":annual_growth(facts["facts"],TAGS["net_income"],asof)}
     return {"cik":int(cik),"entity":facts.get("entityName"),"asof":asof.isoformat(),
-            "ttm":ttm,
+            "ttm":ttm,"annual_growth":growth,
             "point_in_time":True,"source":"SEC companyfacts","fields":fields,
             "missing":[name for name,val in fields.items() if val is None],
             "warning":"Not a SIDI score. Period length, TTM, sector medians, valuation and historical price must be reconstructed separately."}
