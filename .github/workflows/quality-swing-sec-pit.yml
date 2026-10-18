@@ -36,11 +36,15 @@ jobs:
           python research/build_sec_universe.py --user-agent "$SEC_USER_AGENT"
       - name: Validate historical filing selection
         run: python research/test_sec_pit.py
+      - name: Test historical ratio reconstruction
+        run: python research/test_pit_ratios.py
       - name: SEC point-in-time pilot
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
           python research/sec_pit_batch.py --universe-csv results/quality_swing/sec_universe.csv --asof "${{ inputs.asof }}" --limit "${{ inputs.limit }}"
+      - name: Summarize historical ratio coverage
+        run: python research/pit_ratios.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
