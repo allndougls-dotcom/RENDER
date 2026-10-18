@@ -2301,6 +2301,56 @@ function renderStats() {
     <div class="stat-card red"><div class="stat-label">Con Warnings</div><div class="stat-val" style="color:var(--red)">${warns}</div><div class="stat-sub">revisar antes de operar</div></div>
     <div class="stat-card green"><div class="stat-label">FULL SETUP sin warning</div><div class="stat-val" style="color:var(--green)">${fullNoWarn.length}</div><div class="stat-sub">señal más limpia</div></div>
   `;
+  renderStatPanel();
+}
+
+
+let openStatKind = null;
+const statKinds = ['filtered','full','whitebird','technical','blocked','missing','score','drawdown','warnings','clean'];
+function statCandidates(k) {
+ const full=filteredData.filter(d=>d.fullSetup===true),hot=allData.filter(d=>d.setupHot===true);
+ switch(k){
+ case 'full':return full;
+ case 'whitebird':return full.filter(d=>d.whiteBirdCandidate===true);
+ case 'technical':return hot;
+ case 'blocked':return hot.filter(d=>d.fullSetup!==true&&(d.sidiGateFailures||'').split('|').includes('SPY20'));
+ case 'missing':return allData.filter(d=>d.contextReady===false);
+ case 'warnings':return filteredData.filter(d=>(d.warningCount||0)>0);
+ case 'clean':return full.filter(d=>(d.warningCount||0)===0);
+ default:return filteredData;
+ }
+}
+function renderStatPanel() {
+ const bar=document.getElementById('statsBar');if(!bar)return;
+ let panel=document.getElementById('statPanel');
+ if(!panel){panel=document.createElement('section');panel.id='statPanel';bar.after(panel);}
+ const cards=[...bar.querySelectorAll('.stat-card')];
+ cards.forEach((el,i)=>{
+  const k=statKinds[i];if(!k)return;
+  el.style.cursor='pointer';el.tabIndex=0;el.setAttribute('role','button');
+  el.setAttribute('aria-expanded',String(k===openStatKind));
+  el.onclick=()=>{openStatKind=k===openStatKind?null:k;renderStatPanel();};
+  el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};
+  el.style.outline=k===openStatKind?'2px solid var(--accent)':'';
+ });
+ panel.replaceChildren();panel.hidden=!openStatKind;if(!openStatKind)return;
+ Object.assign(panel.style,{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'9px',padding:'16px',margin:'-10px 0 20px'});
+ const head=document.createElement('div');head.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px';
+ const h=document.createElement('strong');h.textContent=cards[statKinds.indexOf(openStatKind)]?.querySelector('.stat-label')?.textContent||'Empresas';
+ const close=document.createElement('button');close.className='btn btn-secondary';close.textContent='Cerrar ✕';close.onclick=()=>{openStatKind=null;renderStatPanel();};head.append(h,close);panel.append(head);
+ const entries=statCandidates(openStatKind).slice().sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
+ const summary=document.createElement('p');summary.style.color='var(--text2)';summary.textContent=entries.length+' empresas · pulsa para abrir su ficha';panel.append(summary);
+ const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:8px;max-height:480px;overflow:auto';
+ entries.forEach(d=>{
+  const item=document.createElement('button');item.type='button';item.style.cssText='background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px;color:var(--text);text-align:left;cursor:pointer';
+  const name=document.createElement('strong');name.textContent=(d.ticker||'—')+' · '+(d.name||'');
+  const detail=document.createElement('small');detail.style.cssText='display:block;margin-top:6px;color:var(--text2);line-height:1.5';
+  const reasons=String(d.sidiGateFailures||'').split('|').filter(Boolean);
+  detail.textContent=['Score '+d.score,'DD60 '+d.drawdown60+'%','Warnings '+(d.warningCount||0),reasons.length?'Puertas: '+reasons.join(', '):'',d.contextReady===false?'Contexto incompleto':''].filter(Boolean).join(' · ');
+  item.append(name,detail);item.onclick=()=>openModal(d);grid.append(item);
+ });
+ if(!entries.length){const empty=document.createElement('p');empty.textContent='No hay empresas en esta categoría.';panel.append(empty);}
+ panel.append(grid);
 }
 
 // Badge de setup de una empresa (tabla de escritorio y tarjetas de móvil)
