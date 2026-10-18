@@ -23,10 +23,11 @@ def get(url,agent):
     req=urllib.request.Request(url,headers={"User-Agent":agent,"Accept":"application/json"})
     with urllib.request.urlopen(req,timeout=40) as r:return json.load(r)
 def pick(facts, names, asof, kind):
-    for tag in names:
+    """Latest available disclosure across equivalent tags, never latest revised today."""
+    valid=[]
+    for priority,tag in enumerate(names):
         units=facts.get("us-gaap",{}).get(tag,{}).get("units",{})
         rows=units.get("shares" if kind=="shares" else "USD",[])
-        valid=[]
         for item in rows:
             try:
                 filed=date.fromisoformat(item["filed"])
@@ -40,14 +41,12 @@ def pick(facts, names, asof, kind):
                 if start is None:continue
                 duration=(end-start).days
                 if not (75<=duration<=380):continue
-            else:
-                if start is not None:continue
-            valid.append((end,filed,item.get("accn",""),value,start,tag))
-        if valid:
-            end,filed,accn,value,start,selected_tag=max(valid,key=lambda x:(x[0],x[1]))
-            return dict(value=value,period_end=end.isoformat(),period_start=start.isoformat() if start else None,
-                        available_on=filed.isoformat(),accession=accn,tag=selected_tag)
-    return None
+            elif start is not None:continue
+            valid.append((end,filed,-priority,item.get("accn",""),value,start,tag))
+    if not valid:return None
+    end,filed,_,accn,value,start,tag=max(valid,key=lambda x:(x[0],x[1],x[2]))
+    return dict(value=value,period_end=end.isoformat(),period_start=start.isoformat() if start else None,
+                available_on=filed.isoformat(),accession=accn,tag=tag)
 
 def snapshot(cik,asof,agent):
     facts=get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json",agent)
