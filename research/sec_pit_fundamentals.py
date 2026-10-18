@@ -8,16 +8,16 @@ import argparse,json,os,urllib.request
 from datetime import date
 
 TAGS = {
- "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax","Revenues","SalesRevenueNet"],
- "net_income": ["NetIncomeLoss"],
+ "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax","RevenueFromContractWithCustomerIncludingAssessedTax","Revenues","SalesRevenueNet","SalesRevenueGoodsNet"],
+ "net_income": ["NetIncomeLoss","ProfitLoss"],
  "assets": ["Assets"],
- "liabilities": ["Liabilities"],
- "equity": ["StockholdersEquity"],
+ "liabilities": ["Liabilities","LiabilitiesAndStockholdersEquity"],
+ "equity": ["StockholdersEquity","StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
  "current_assets": ["AssetsCurrent"],
  "current_liabilities": ["LiabilitiesCurrent"],
  "operating_cashflow": ["NetCashProvidedByUsedInOperatingActivities"],
- "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
- "shares": ["CommonStockSharesOutstanding"],
+ "capex": ["PaymentsToAcquirePropertyPlantAndEquipment","PaymentsForProceedsFromOtherInvestingActivities"],
+ "shares": ["CommonStockSharesOutstanding","CommonStockSharesIssued"],
 }
 def get(url,agent):
     req=urllib.request.Request(url,headers={"User-Agent":agent,"Accept":"application/json"})
@@ -35,17 +35,18 @@ def pick(facts, names, asof, kind):
                 value=float(item["val"])
             except (KeyError,ValueError,TypeError):continue
             if filed>asof or end>asof:continue
+            if item.get("form") not in ("10-K","10-Q","10-K/A","10-Q/A"):continue
             if kind=="flow":
                 if start is None:continue
                 duration=(end-start).days
                 if not (75<=duration<=380):continue
             else:
                 if start is not None:continue
-            valid.append((end,filed,item.get("accn",""),value,start))
+            valid.append((end,filed,item.get("accn",""),value,start,tag))
         if valid:
-            end,filed,accn,value,start=max(valid,key=lambda x:(x[0],x[1]))
+            end,filed,accn,value,start,selected_tag=max(valid,key=lambda x:(x[0],x[1]))
             return dict(value=value,period_end=end.isoformat(),period_start=start.isoformat() if start else None,
-                        available_on=filed.isoformat(),accession=accn,tag=tag)
+                        available_on=filed.isoformat(),accession=accn,tag=selected_tag)
     return None
 
 def snapshot(cik,asof,agent):
