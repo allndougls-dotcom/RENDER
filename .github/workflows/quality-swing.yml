@@ -38,6 +38,10 @@ jobs:
       - name: Download adjusted daily bars
         if: steps.coverage.outputs.count != '0'
         run: python research/download_quality_prices.py --years ${{ inputs.years || '5' }}
+      - name: Validate technical reconstruction against future-data leakage
+        run: python research/test_technical_pit.py
+      - name: Reconstruct historical technical gates
+        run: python research/technical_pit.py --prices data/backtest_prices --out results/quality_swing/technical_pit
       - name: Execute isolated research
         run: python research/quality_swing.py --prices data/backtest_prices --snapshots data/master --out results/quality_swing
       - name: Write eligibility note
@@ -62,6 +66,11 @@ jobs:
         if: always()
         with:
           name: quality-swing-results
-          path: results/quality_swing/
+          path: |
+            results/quality_swing/coverage.json
+            results/quality_swing/eligibility.json
+            results/quality_swing/summary.csv
+            results/quality_swing/trades.csv
+            results/quality_swing/technical_coverage.json
           if-no-files-found: warn
           retention-days: 30
