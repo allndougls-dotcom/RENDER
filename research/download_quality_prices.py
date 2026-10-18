@@ -15,16 +15,19 @@ def main():
     ap.add_argument("--universe-csv",default=None)
     ap.add_argument("--limit",type=int,default=None)
     args=ap.parse_args()
-    names=set()
+    names=[]
+    seen=set()
     source_files=[Path(args.universe_csv)] if args.universe_csv else list(Path(args.snapshots).glob("sp500_full_export_*.csv"))
     for snapshot in source_files:
         with snapshot.open(encoding="utf-8-sig",newline="") as f:
             for row in csv.DictReader(f):
                 tick=(row.get("ticker") or "").strip().upper()
-                if tick:names.add(tick)
+                if tick and tick not in seen:
+                    names.append(tick)
+                    seen.add(tick)
     target=Path(args.prices);target.mkdir(parents=True,exist_ok=True)
     successes=0;fails=[]
-    selected=sorted(names)[:args.limit] if args.limit else sorted(names)
+    selected=names[:args.limit] if args.limit else names
     for index,ticker in enumerate(selected,1):
         output=target/f"{ticker}.csv"
         if output.is_file():successes+=1;continue
