@@ -34,6 +34,8 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
           python research/build_sec_universe.py --user-agent "$SEC_USER_AGENT"
+      - name: Validate historical filing selection
+        run: python research/test_sec_pit.py
       - name: SEC point-in-time pilot
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
