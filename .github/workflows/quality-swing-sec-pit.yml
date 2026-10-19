@@ -70,6 +70,8 @@ jobs:
         run: python research/download_quality_prices.py --universe-csv results/quality_swing/sec_universe.csv --prices data/backtest_prices --years 10 --limit "${{ inputs.limit || '50' }}"
       - name: Download split-only historical valuation prices (research)
         run: python research/download_valuation_prices.py --limit "${{ inputs.limit || '50' }}"
+      - name: Test independent split attestation
+        run: python research/test_split_attestation.py
       - name: Test point-in-time valuation joins
         run: python research/test_historical_valuation_join.py
       - name: Test SEC split candidate disclosure cutoff
