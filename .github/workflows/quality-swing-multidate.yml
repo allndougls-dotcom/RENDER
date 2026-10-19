@@ -52,6 +52,10 @@ jobs:
             cp results/quality_swing/exploratory_ranking.json "results/quality_swing/dated_rankings/$ASOF.json"
             echo "::endgroup::"
           done
+      - name: Report real reconstructed candidate counts per date
+        run: |
+          python research/test_multidate_coverage.py
+          python research/multidate_coverage.py
       - name: Compare cohorts across independent dates with 10% stop
         run: python research/quality_cohort_comparison.py --ranking-dir results/quality_swing/dated_rankings --stop 0.10
       - uses: actions/upload-artifact@v4
@@ -61,5 +65,6 @@ jobs:
           path: |
             results/quality_swing/dated_rankings/
             results/quality_swing/cohort_comparison.json
+            results/quality_swing/multidate_coverage.json
           retention-days: 30
           if-no-files-found: warn
