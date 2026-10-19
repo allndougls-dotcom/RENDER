@@ -72,6 +72,10 @@ jobs:
         run: python research/download_valuation_prices.py --limit "${{ inputs.limit || '50' }}"
       - name: Test point-in-time valuation joins
         run: python research/test_historical_valuation_join.py
+      - name: Audit split-action history provenance
+        run: |
+          python research/test_split_provenance_audit.py
+          python research/split_provenance_audit.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Audit historical valuation joins
         run: python research/historical_valuation_join.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Reconstruct dated technical gates
