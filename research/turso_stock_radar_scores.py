@@ -4,6 +4,7 @@ Exports only ticker/date/score columns. Never exports arbitrary table contents.
 No INSERT/UPDATE/DELETE or schema changes. Turso credentials come from env.
 """
 import argparse,csv,json,os,re,urllib.request
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -76,8 +77,9 @@ def main():
     p.add_argument("--to-date",default="2026-10-19")
     p.add_argument("--out",default="results/quality_swing/turso_stock_radar_scores")
     a=p.parse_args()
-    if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}",a.from_date) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}",a.to_date):
-        p.error("Invalid date format")
+    date.fromisoformat(a.from_date)
+    date.fromisoformat(a.to_date)
+    if a.from_date>a.to_date:p.error("Date range reversed")
     token=os.environ.get("TURSO_AUTH_TOKEN","")
     if not token:raise SystemExit("TURSO_AUTH_TOKEN missing")
     api=endpoint(os.environ.get("TURSO_DATABASE_URL",""))
