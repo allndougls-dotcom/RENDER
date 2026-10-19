@@ -15,7 +15,10 @@ def inspect(directory):
         reports.append({"asof":p["asof"],"ranked":len(rows),
           "gt_8_5":sum(r.get("combined_exploratory",0)>8.5 for r in rows),
           "between_6_5_8_5":sum(6.5<=r.get("combined_exploratory",0)<=8.5 for r in rows),
-          "with_neutral_imputation":sum(bool(r.get("neutral_imputation_fields")) for r in rows)})
+          "with_neutral_imputation":sum(bool(r.get("neutral_imputation_fields")) for r in rows),
+          "roe_available":sum("roe" not in r.get("neutral_imputation_fields",[]) for r in rows),
+          "debt_equity_available":sum("debt_equity" not in r.get("neutral_imputation_fields",[]) for r in rows),
+          "both_available":sum(not ({"roe","debt_equity"} & set(r.get("neutral_imputation_fields",[]))) for r in rows)})
     if not reports:raise ValueError("No independently dated rankings")
     return {"dates":len(reports),"per_date":reports,
             "gt_8_5_total":sum(r["gt_8_5"] for r in reports),
