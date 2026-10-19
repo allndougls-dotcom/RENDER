@@ -23,5 +23,21 @@ def test():
   (root/"sec"/"AAPL.json").write_text(json.dumps(record))
   x=audit(root/"sec",root/"tech","2024-06-28")
   assert not x["rows"][0]["checks"]["validated_eps_growth"]
+def test_valuation_bridge():
+ with tempfile.TemporaryDirectory() as t:
+  root=Path(t);(root/"sec").mkdir();(root/"tech").mkdir()
+  (root/"sec"/"X.json").write_text(json.dumps({"ticker":"X","asof":"2024-06-28","fields":{},"ttm":{}}))
+  v=root/"values.json"
+  v.write_text(json.dumps({"asof":"2024-06-28","rows":[{"ticker":"X","asof":"2024-06-28","valuation":{"valid":False,"pe":10,"pb":3,"market_cap":1000}}]}))
+  report=audit(root/"sec",root/"tech","2024-06-28",valuation_file=v)
+  assert not report["rows"][0]["checks"]["historical_pe_pb_market_cap"]
+  v.write_text(json.dumps({"asof":"2024-06-28","rows":[{"ticker":"X","asof":"2024-06-28","valuation":{"valid":True,"pe":10,"pb":3,"market_cap":1000}}]}))
+  report=audit(root/"sec",root/"tech","2024-06-28",valuation_file=v)
+  assert report["rows"][0]["checks"]["historical_pe_pb_market_cap"]
+  assert report["valid_combined_scores"]==0
+  v.write_text(json.dumps({"asof":"2023-06-28","rows":[]}))
+  try:audit(root/"sec",root/"tech","2024-06-28",valuation_file=v)
+  except ValueError:pass
+  else:raise AssertionError("Cross-date valuation was accepted")
 if __name__=="__main__":
- test();print("PASS integrated incomplete data audit")
+ test();test_valuation_bridge();print("PASS integrated valuation provenance audit")
