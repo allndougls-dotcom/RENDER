@@ -21,9 +21,9 @@ TAGS = {
  "operating_cashflow": ["NetCashProvidedByUsedInOperatingActivities"],
  "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
  "shares": ["CommonStockSharesOutstanding"],
- "long_term_debt_noncurrent": ["LongTermDebtNoncurrent"],
- "long_term_debt_current": ["LongTermDebtCurrent"],
- "short_term_borrowings": ["ShortTermBorrowings"],
+ "long_term_debt_noncurrent": ["LongTermDebtNoncurrent","LongTermDebtAndCapitalLeaseObligationsNoncurrent"],
+ "long_term_debt_current": ["LongTermDebtCurrent","LongTermDebtAndCapitalLeaseObligationsCurrent","CurrentPortionOfLongTermDebt"],
+ "short_term_borrowings": ["ShortTermBorrowings","ShortTermDebtCurrent"],
 }
 def get(url,agent):
     req=urllib.request.Request(url,headers={"User-Agent":agent,"Accept":"application/json"})

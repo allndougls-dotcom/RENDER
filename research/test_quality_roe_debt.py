@@ -10,6 +10,9 @@ base["fields"]={"equity":fact(300),"equity_prior":fact(200,"2023-03-31","2023-05
 v=compute(base)["metrics"]
 assert abs(v["roe_ttm_avg_equity_exploratory"]-.20)<1e-10
 assert abs(v["debt_equity_interest_bearing_exploratory_pct"]-30)<1e-10
+base["fields"]["long_term_debt_current"]=None
+assert compute(base)["metrics"]["debt_equity_interest_bearing_exploratory_pct"] is None
+base["fields"]["long_term_debt_current"]=fact(20)
 base["fields"]["short_term_borrowings"]["period_end"]="2023-12-31"
 assert compute(base)["metrics"]["debt_equity_interest_bearing_exploratory_pct"] is None
 base["fields"]["short_term_borrowings"]=fact(10,"2024-03-31","2024-08-01")

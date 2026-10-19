@@ -4,7 +4,7 @@ on:
     inputs:
       limit:
         description: 'Number of current-universe tickers (exploratory)'
-        default: '20'
+        default: '100'
         required: true
   push:
     branches: [main]
