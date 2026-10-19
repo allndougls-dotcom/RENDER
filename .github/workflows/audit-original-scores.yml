@@ -1,0 +1,28 @@
+name: Audit original SIDI scores since August
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-original-scores.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test historic score audit
+        run: python research/test_audit_original_scores.py
+      - name: Audit saved original master CSVs
+        run: python research/audit_original_scores.py --root data/master --start 2026-08-01
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sidi-original-scores-since-august
+          path: results/quality_swing/original_score_audit/
+          retention-days: 30
+          if-no-files-found: warn
