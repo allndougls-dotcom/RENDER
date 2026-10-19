@@ -88,6 +88,10 @@ jobs:
         run: |
           python research/test_split_provenance_audit.py
           python research/split_provenance_audit.py --asof "${{ inputs.asof || '2024-06-28' }}"
+      - name: Measure valuation input coverage
+        run: |
+          python research/test_valuation_candidate_coverage.py
+          python research/valuation_candidate_coverage.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Audit historical valuation joins
         run: python research/historical_valuation_join.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Reconstruct dated technical gates
