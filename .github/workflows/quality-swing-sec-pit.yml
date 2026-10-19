@@ -72,6 +72,12 @@ jobs:
         run: python research/download_valuation_prices.py --limit "${{ inputs.limit || '50' }}"
       - name: Test point-in-time valuation joins
         run: python research/test_historical_valuation_join.py
+      - name: Test SEC split candidate disclosure cutoff
+        run: python research/test_sec_split_corroboration.py
+      - name: Collect SEC split disclosure candidates
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: python research/sec_split_corroboration.py --asof "${{ inputs.asof || '2024-06-28' }}" --limit "${{ inputs.limit || '50' }}"
       - name: Audit split-action history provenance
         run: |
           python research/test_split_provenance_audit.py
