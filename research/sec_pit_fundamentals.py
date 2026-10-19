@@ -8,6 +8,7 @@ import argparse,json,os,urllib.request
 from datetime import date
 from sec_ttm import observations, latest_ttm
 from annual_growth_pit import annual_growth
+from eps_pit import eps_annual, eps_annual_growth
 
 TAGS = {
  "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax","RevenueFromContractWithCustomerIncludingAssessedTax","Revenues","SalesRevenueNet","SalesRevenueGoodsNet"],
@@ -60,8 +61,9 @@ def snapshot(cik,asof,agent):
     ttm={name:latest_ttm(observations(facts["facts"],tags,asof)) for name,tags in ttm_tags.items()}
     growth={"revenue_annual":annual_growth(facts["facts"],TAGS["revenue"],asof),
             "net_income_annual":annual_growth(facts["facts"],TAGS["net_income"],asof)}
+    eps={"annual":eps_annual(facts["facts"],asof),"annual_growth":eps_annual_growth(facts["facts"],asof)}
     return {"cik":int(cik),"entity":facts.get("entityName"),"asof":asof.isoformat(),
-            "ttm":ttm,"annual_growth":growth,
+            "ttm":ttm,"annual_growth":growth,"eps":eps,
             "point_in_time":True,"source":"SEC companyfacts","fields":fields,
             "missing":[name for name,val in fields.items() if val is None],
             "warning":"Not a SIDI score. Period length, TTM, sector medians, valuation and historical price must be reconstructed separately."}
