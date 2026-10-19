@@ -22,8 +22,17 @@ def compute(d):
     ocf=ttm["operating_cashflow"]
     same_end=(d.get("ttm",{}).get("operating_cashflow") or {}).get("period_end")== (d.get("ttm",{}).get("capex") or {}).get("period_end")
     fcf=ocf-capex if ocf is not None and capex is not None and same_end else None
+    prior=f("equity_prior")
+    debt_parts=[f(x) for x in ("long_term_debt_noncurrent","long_term_debt_current","short_term_borrowings")]
+    debt_dates=[(fields.get(x) or {}).get("period_end") for x in ("long_term_debt_noncurrent","long_term_debt_current","short_term_borrowings") if (fields.get(x) or {}).get("value") is not None]
+    debt_consistent=(len(debt_dates)>0 and len(set(debt_dates))==1 and
+                     debt_dates[0]==(fields.get("equity") or {}).get("period_end"))
+    debt=sum(x for x in debt_parts if x is not None) if debt_consistent else None
+    avg_equity=(equity+prior)/2 if equity is not None and prior is not None and equity>0 and prior>0 else None
     ratios={
       "fcf_ttm":fcf,
+      "roe_ttm_avg_equity_exploratory":safe_div(ttm["net_income"],avg_equity),
+      "debt_equity_interest_bearing_exploratory_pct":100*safe_div(debt,equity) if debt is not None and equity not in (None,0) else None,
       "fcf_ni_ratio_ttm":safe_div(fcf,ttm["net_income"]) if (d.get("ttm",{}).get("net_income") or {}).get("period_end")== (d.get("ttm",{}).get("operating_cashflow") or {}).get("period_end") else None,
       "net_margin_ttm":safe_div(ttm["net_income"],ttm["revenue"]) if (d.get("ttm",{}).get("net_income") or {}).get("period_end")== (d.get("ttm",{}).get("revenue") or {}).get("period_end") else None,
       "roe_ttm_over_latest_equity_proxy":safe_div(ttm["net_income"],equity),
@@ -34,7 +43,9 @@ def compute(d):
             "ttm":ttm,"historical_sidi_score":None,
             "caveats":["ROE requires period-average equity", "Liabilities are not interest-bearing debt",
              "FCF and net income require matched TTM period ends",
-             "Historical market cap and sector contemporaneous medians missing"]}
+             "Historical market cap and sector contemporaneous medians missing",
+             "Borrowings sum may omit issuer-specific debt tags; zero must not be inferred from missing tags",
+             "Average equity proxy requires prior balance sheet, but timing may not match TTM period"]}
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--in-dir",default="results/quality_swing/sec_pit")
