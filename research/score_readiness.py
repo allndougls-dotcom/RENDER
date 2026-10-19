@@ -21,6 +21,9 @@ def audit(records):
         result["not_ready"]+=1
         result["not_comparable"].append({"ticker":ticker,"missing":missing})
         for field in missing: result["missing"][field]=result["missing"].get(field,0)+1
+    result["eps_coverage"]={
+      "annual_eps":sum((d.get("eps") or {}).get("annual") is not None for d in records),
+      "annual_eps_growth":sum((d.get("eps") or {}).get("annual_growth") is not None for d in records)}
     result["annual_growth_coverage"]={k:sum((d.get("annual_growth") or {}).get(k) is not None for d in records) for k in ("revenue_annual","net_income_annual")}
     result["ttm_coverage"]={k:sum(d.get("ttm",{}).get(k) is not None for d in records) for k in ("revenue","net_income","operating_cashflow","capex")}
     result["quality_gt_8_5_count"]=None
