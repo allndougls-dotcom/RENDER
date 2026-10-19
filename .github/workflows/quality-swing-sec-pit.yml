@@ -92,6 +92,10 @@ jobs:
         run: |
           python research/test_valuation_candidate_coverage.py
           python research/valuation_candidate_coverage.py --asof "${{ inputs.asof || '2024-06-28' }}"
+      - name: Calculate exploratory valuation coverage (NOT SIDI scores)
+        run: |
+          python research/test_exploratory_valuation.py
+          python research/exploratory_valuation.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Audit historical valuation joins
         run: python research/historical_valuation_join.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Reconstruct dated technical gates
