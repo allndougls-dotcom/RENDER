@@ -21,6 +21,9 @@ TAGS = {
  "operating_cashflow": ["NetCashProvidedByUsedInOperatingActivities"],
  "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
  "shares": ["CommonStockSharesOutstanding"],
+ "long_term_debt_noncurrent": ["LongTermDebtNoncurrent"],
+ "long_term_debt_current": ["LongTermDebtCurrent"],
+ "short_term_borrowings": ["ShortTermBorrowings"],
 }
 def get(url,agent):
     req=urllib.request.Request(url,headers={"User-Agent":agent,"Accept":"application/json"})
@@ -56,6 +59,16 @@ def snapshot(cik,asof,agent):
     fields={name:pick(facts["facts"],tags,asof,"flow" if name in
           {"revenue","net_income","operating_cashflow","capex"} else "shares" if name=="shares" else "balance")
           for name,tags in TAGS.items()}
+    # Prior equity is selected as it was known at asof, with a prior balance date.
+    current_equity=fields.get("equity")
+    prior_equity=None
+    if current_equity:
+        earlier=date.fromisoformat(current_equity["period_end"])
+        prior_asof=min(asof,earlier)
+        prior_equity=pick(facts["facts"],TAGS["equity"],prior_asof,"balance")
+        if prior_equity and prior_equity["period_end"]>=current_equity["period_end"]:
+            prior_equity=None
+    fields["equity_prior"]=prior_equity
     ttm_tags={"revenue":TAGS["revenue"],"net_income":TAGS["net_income"],
               "operating_cashflow":TAGS["operating_cashflow"],"capex":TAGS["capex"]}
     ttm={name:latest_ttm(observations(facts["facts"],tags,asof)) for name,tags in ttm_tags.items()}
