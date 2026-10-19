@@ -37,6 +37,7 @@ jobs:
           python research/download_valuation_prices.py --limit "$PILOT_LIMIT"
       - name: Validate independent-date calculations
         run: |
+          python -m py_compile research/ttm_metrics.py research/sec_pit_fundamentals.py
           python research/test_quality_roe_debt.py
           python research/test_eps_pit.py
           python research/test_exploratory_valuation.py
