@@ -29,9 +29,17 @@ def compute(d):
                      debt_dates[0]==(fields.get("equity") or {}).get("period_end"))
     debt=sum(x for x in debt_parts if x is not None) if debt_consistent else None
     avg_equity=(equity+prior)/2 if equity is not None and prior is not None and equity>0 and prior>0 else None
+    from datetime import date
+    net_end=(d.get("ttm",{}).get("net_income") or {}).get("period_end")
+    equity_end=(fields.get("equity") or {}).get("period_end")
+    prior_end=(fields.get("equity_prior") or {}).get("period_end")
+    roe_period_compatible=(net_end is not None and equity_end is not None
+        and prior_end is not None
+        and abs((date.fromisoformat(net_end)-date.fromisoformat(equity_end)).days)<=110
+        and 330<=(date.fromisoformat(equity_end)-date.fromisoformat(prior_end)).days<=400)
     ratios={
       "fcf_ttm":fcf,
-      "roe_ttm_avg_equity_exploratory":safe_div(ttm["net_income"],avg_equity),
+      "roe_ttm_avg_equity_exploratory":safe_div(ttm["net_income"],avg_equity) if roe_period_compatible else None,
       "debt_equity_interest_bearing_exploratory_pct":100*safe_div(debt,equity) if debt is not None and equity not in (None,0) else None,
       "fcf_ni_ratio_ttm":safe_div(fcf,ttm["net_income"]) if (d.get("ttm",{}).get("net_income") or {}).get("period_end")== (d.get("ttm",{}).get("operating_cashflow") or {}).get("period_end") else None,
       "net_margin_ttm":safe_div(ttm["net_income"],ttm["revenue"]) if (d.get("ttm",{}).get("net_income") or {}).get("period_end")== (d.get("ttm",{}).get("revenue") or {}).get("period_end") else None,
