@@ -28,27 +28,39 @@ def eps_annual(facts,asof):
             "basis":"USD/shares reported; no split adjustment inferred"}
 
 def eps_annual_growth(facts,asof):
-    periods={}
-    for tag in EPS_TAGS:
-        for x in facts.get("us-gaap",{}).get(tag,{}).get("units",{}).get("USD/shares",[]):
-            try:
-                s=date.fromisoformat(x["start"]);e=date.fromisoformat(x["end"])
-                f=date.fromisoformat(x["filed"]);v=float(x["val"])
-            except (ValueError,KeyError,TypeError):continue
-            if f>asof or e>asof or x.get("form") not in ("10-K","10-K/A"):continue
-            if not 330<=(e-s).days<=380 or not isfinite(v):continue
-            key=(s,e)
-            old=periods.get(key)
-            candidate=(f,1 if tag==EPS_TAGS[0] else 0,v,tag)
-            if old is None or candidate[:2]>old[:2]:periods[key]=candidate
-    ordered=sorted(periods.items(),key=lambda r:r[0][1],reverse=True)
-    if len(ordered)<2:return None
-    (s1,e1),(f1,_,v1,t1)=ordered[0]
-    preceding=[((s,e),info) for (s,e),info in ordered[1:]
-               if 350<=(s1-s).days<=380 and 350<=(e1-e).days<=380]
-    if not preceding:return None
-    (s0,e0),(f0,_,v0,t0)=preceding[0]
-    if v0==0 or t0!=t1:return None
-    return {"growth":(v1-v0)/abs(v0),"new_eps":v1,"old_eps":v0,
-            "new_period_end":str(e1),"old_period_end":str(e0),
-            "available_on":str(max(f1,f0)),"tag":t1}
+    """Compare diluted annual EPS from the SAME filed 10-K accession.
+
+    This avoids mixing pre-/post-split EPS bases reported in different filings.
+    If comparable prior-year diluted EPS is not included in the latest available
+    annual filing, return missing instead of combining incompatible numbers.
+    """
+    by_filing={}
+    for item in facts.get("us-gaap",{}).get("EarningsPerShareDiluted",{}).get("units",{}).get("USD/shares",[]):
+        try:
+            start=date.fromisoformat(item["start"])
+            end=date.fromisoformat(item["end"])
+            filed=date.fromisoformat(item["filed"])
+            value=float(item["val"])
+            accession=item["accn"]
+        except (ValueError,TypeError,KeyError):continue
+        if not isfinite(value) or not 330<=(end-start).days<=380:continue
+        if filed>asof or end>asof or item.get("form") not in ("10-K","10-K/A"):continue
+        by_filing.setdefault(accession,[]).append((start,end,filed,value))
+    if not by_filing:return None
+    all_latest=[(end,filed,accn,start,val)
+                for accn,observations in by_filing.items()
+                for start,end,filed,val in observations]
+    latest_end,latest_filed,latest_accn,latest_start,latest_value=max(
+        all_latest,key=lambda x:(x[0],x[1]))
+    peers=[(s,e,f,v) for s,e,f,v in by_filing[latest_accn]
+           if 350<=(latest_start-s).days<=380
+           and 350<=(latest_end-e).days<=380]
+    if not peers:return None
+    old_start,old_end,old_filed,old_value=max(peers,key=lambda x:x[1])
+    if old_value==0:return None
+    return {"growth":(latest_value-old_value)/abs(old_value),
+            "new_eps":latest_value,"old_eps":old_value,
+            "new_period_end":str(latest_end),"old_period_end":str(old_end),
+            "available_on":str(max(latest_filed,old_filed)),
+            "tag":"EarningsPerShareDiluted","accession":latest_accn,
+            "comparability":"same_filing_diluted_eps"}
