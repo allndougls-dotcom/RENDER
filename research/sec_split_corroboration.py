@@ -22,6 +22,23 @@ def sec_candidates(companyfacts,asof):
                            "filed":x["filed"],"accession":x.get("accn"),"unit":unit})
     return result
 
+def compare_candidates(yahoo_events,sec_events,asof):
+    """Ratio-only comparison: SEC end dates are not ex-dates."""
+    matches=[];unmatched=[]
+    for event in yahoo_events:
+        ratio=float(event["ratio"])
+        dated=event["date"]
+        candidates=[x for x in sec_events
+                    if abs(float(x["ratio"])-ratio)<1e-8
+                    and x.get("filed","9999")<=asof]
+        row={"yahoo_ex_date":dated,"ratio":ratio,
+             "sec_accessions":sorted(set(x["accession"] for x in candidates if x.get("accession")))}
+        (matches if candidates else unmatched).append(row)
+    return {"ratio_matches_only":matches,"unmatched_yahoo_events":unmatched,
+            "matched_event_count":len(matches),
+            "fully_verified":False,
+            "caveat":"Ratio coincidences do not verify ex-dates, completeness, or post-asof events."}
+
 def report(universe,price_dir,asof,agent,limit):
     findings=[];rows=list(csv.DictReader(open(universe,encoding="utf-8-sig")))
     for row in rows[:limit]:
@@ -36,6 +53,7 @@ def report(universe,price_dir,asof,agent,limit):
             with urllib.request.urlopen(request,timeout=35) as response:
                 data=json.load(response)
             item["sec_candidates"]=sec_candidates(data,asof)
+            item["comparison"]=compare_candidates(item["yahoo_events"],item["sec_candidates"],asof)
             item["status"]="sec_candidate_review_needed" if item["sec_candidates"] else "no_sec_candidate"
         except Exception as exc:
             item["status"]="sec_lookup_failed";item["error"]=str(exc)[:120]
