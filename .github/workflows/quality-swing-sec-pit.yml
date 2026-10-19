@@ -112,6 +112,10 @@ jobs:
         run: |
           python research/test_exploratory_quality_ranking.py
           python research/exploratory_quality_ranking.py --asof "${{ inputs.asof || '2024-06-28' }}"
+      - name: Evaluate exploratory forward TP outcomes (not verified WR)
+        run: |
+          python research/test_exploratory_forward_outcomes.py
+          python research/exploratory_forward_outcomes.py
       - name: Test cross-module historical audit
         run: python research/test_integrated_readiness.py
       - name: Integrate financial and technical coverage
