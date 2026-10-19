@@ -108,6 +108,10 @@ jobs:
         run: python research/test_exact_technical_score.py
       - name: Compute exact production technical score at historical close
         run: python research/exact_technical_score.py --asof "${{ inputs.asof || '2024-06-28' }}"
+      - name: Exploratory QUALITY SWING ranking
+        run: |
+          python research/test_exploratory_quality_ranking.py
+          python research/exploratory_quality_ranking.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Test cross-module historical audit
         run: python research/test_integrated_readiness.py
       - name: Integrate financial and technical coverage
