@@ -1,0 +1,42 @@
+name: SIDI Turso STOCK-RADAR score audit
+on:
+  workflow_dispatch:
+    inputs:
+      from_date:
+        description: First observation date
+        default: '2026-08-01'
+        required: true
+      to_date:
+        description: Last observation date
+        default: '2026-10-19'
+        required: true
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Python and SQL discovery tests
+        run: |
+          python -m py_compile research/turso_stock_radar_scores.py
+          python research/test_turso_stock_radar_scores.py
+      - name: Export historic STOCK-RADAR scores (read-only)
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          FROM_DATE: ${{ inputs.from_date }}
+          TO_DATE: ${{ inputs.to_date }}
+        run: |
+          python research/turso_stock_radar_scores.py --from-date "$FROM_DATE" --to-date "$TO_DATE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: turso-stock-radar-score-audit
+          path: results/quality_swing/turso_stock_radar_scores/
+          retention-days: 7
+          if-no-files-found: warn
