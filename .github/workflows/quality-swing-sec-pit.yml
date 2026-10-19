@@ -10,6 +10,11 @@ on:
         description: 'Max companies to fetch for coverage pilot'
         required: true
         default: '50'
+  push:
+    branches: [main]
+    paths:
+      - 'research/**'
+      - '.github/workflows/quality-swing-sec-pit.yml'
 permissions:
   contents: read
 jobs:
@@ -50,7 +55,7 @@ jobs:
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
-          python research/sec_pit_batch.py --universe-csv results/quality_swing/sec_universe.csv --asof "${{ inputs.asof }}" --limit "${{ inputs.limit }}"
+          python research/sec_pit_batch.py --universe-csv results/quality_swing/sec_universe.csv --asof "${{ inputs.asof || '2024-06-28' }}" --limit "${{ inputs.limit || '50' }}"
       - name: Summarize historical ratio coverage
         run: python research/pit_ratios.py
       - name: Audit historical score readiness
