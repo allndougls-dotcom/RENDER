@@ -29,6 +29,17 @@ def audit(in_dir,tech_dir,asof,score_file=None):
                 candidate=prior[-1]
                 age=(date.fromisoformat(asof)-date.fromisoformat(candidate["Date"][:10])).days
                 if 0<=age<=7:tech=candidate
+        eps_growth=(record.get("eps") or {}).get("annual_growth") or {}
+        eps_sources_valid=(
+            eps_growth.get("growth") is not None
+            and eps_growth.get("tag") == "EarningsPerShareDiluted"
+            and bool(eps_growth.get("available_on"))
+            and eps_growth["available_on"] <= asof
+            and bool(eps_growth.get("new_period_end"))
+            and eps_growth["new_period_end"] <= asof
+            and bool(eps_growth.get("old_period_end"))
+            and eps_growth["old_period_end"] < eps_growth["new_period_end"]
+        )
         checks={
           "ttm_revenue":metrics["ttm"]["revenue"] is not None,
           "ttm_net_income":metrics["ttm"]["net_income"] is not None,
@@ -36,7 +47,7 @@ def audit(in_dir,tech_dir,asof,score_file=None):
           "current_ratio":metrics["metrics"]["current_ratio"] is not None,
           "historical_technical_gates":tech is not None,
           "historical_tech_score":ticker in scores,
-          "validated_eps_growth":False,
+          "validated_eps_growth":eps_sources_valid,
           "historical_debt_equity":False,
           "historical_pe_pb_market_cap":False,
           "historical_sector_medians":False,
@@ -47,6 +58,7 @@ def audit(in_dir,tech_dir,asof,score_file=None):
         companies.append({"ticker":ticker,"asof":asof,"checks":checks,
                           "technical_asof":tech.get("Date","")[:10] if tech else None,
                           "tech_score":scores[ticker]["tech_score"] if ticker in scores else None,
+                          "eps_growth_annual_pit":eps_growth["growth"] if eps_sources_valid else None,
                           "combined_score":None})
     return {"companies":len(companies),"missing":missing,
             "valid_combined_scores":0,"backtest_ready":False,"rows":companies,
