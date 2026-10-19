@@ -2,8 +2,9 @@
 import argparse,csv,json
 from pathlib import Path
 from valuation_pit import historical_valuation
+from split_attestation import verify_attestation
 
-def build(sec_dir,price_dir,asof):
+def build(sec_dir,price_dir,asof,attestation_dir=None):
     rows=[]
     for file in sorted(Path(sec_dir).glob("*.json")):
         if file.name=="coverage.json":continue
@@ -23,6 +24,18 @@ def build(sec_dir,price_dir,asof):
                 eps=(sec.get("eps") or {}).get("annual") or {}
                 shares=fields.get("shares") or {}
                 equity=fields.get("equity") or {}
+                approved=False
+                status="missing_independent_attestation"
+                if attestation_dir:
+                    attestation_file=Path(attestation_dir)/(ticker+".json")
+                    if attestation_file.exists():
+                        periods=[x.get("period_end") for x in (eps,shares,equity) if x.get("period_end")]
+                        try:
+                            approved,status=verify_attestation(
+                                splits,json.loads(attestation_file.read_text()),asof,
+                                min(periods) if periods else asof)
+                        except (ValueError,TypeError):
+                            status="malformed_attestation"
                 valuation=historical_valuation(
                     asof=asof,price=matching[-1]["Close"],price_date=asof,
                     price_basis="yahoo_close_split_adjusted_no_dividends",
@@ -30,7 +43,8 @@ def build(sec_dir,price_dir,asof):
                     shares=shares.get("value"),shares_period_end=shares.get("period_end"),
                     equity=equity.get("value"),equity_period_end=equity.get("period_end"),
                     split_events=splits.get("events"),
-                    split_history_verified=splits.get("split_history_verified",False))
+                    split_history_verified=approved)
+                if not approved:valuation["reason"]=status
         rows.append({"ticker":ticker,"asof":asof,"valuation":valuation})
     blocked={}
     for row in rows:
@@ -44,11 +58,12 @@ def build(sec_dir,price_dir,asof):
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--asof",required=True)
+    p.add_argument("--attestations",default="research/verified_splits")
     p.add_argument("--sec",default="results/quality_swing/sec_pit")
     p.add_argument("--prices",default="results/quality_swing/valuation_prices")
     p.add_argument("--out",default="results/quality_swing/historical_valuations.json")
     a=p.parse_args()
-    result=build(a.sec,a.prices,a.asof)
+    result=build(a.sec,a.prices,a.asof,a.attestations)
     out=Path(a.out);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(result,indent=2))
     print(json.dumps({k:v for k,v in result.items() if k!="rows"},indent=2))
