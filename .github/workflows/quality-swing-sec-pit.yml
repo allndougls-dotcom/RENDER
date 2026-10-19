@@ -116,6 +116,12 @@ jobs:
         run: |
           python research/test_exploratory_forward_outcomes.py
           python research/exploratory_forward_outcomes.py
+      - name: Compare independently dated score cohorts (exploratory only)
+        run: |
+          python research/test_quality_cohort_comparison.py
+          mkdir -p results/quality_swing/dated_rankings
+          cp results/quality_swing/exploratory_ranking.json "results/quality_swing/dated_rankings/${{ inputs.asof || '2024-06-28' }}.json"
+          python research/quality_cohort_comparison.py --ranking-dir results/quality_swing/dated_rankings --stop 0.10
       - name: Test cross-module historical audit
         run: python research/test_integrated_readiness.py
       - name: Integrate financial and technical coverage
