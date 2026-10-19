@@ -9,7 +9,7 @@ assert r["pe"]==10 and r["pb"]==2.5 and r["market_cap"]==5000,r
 r=historical_valuation(**{**base,"split_events":[{"date":"2024-08-01","ratio":2}]})
 assert r["pe"]==20 and r["market_cap"]==10000,r
 r=historical_valuation(**{**base,"split_history_verified":False})
-assert r["valid"] is False and r["pe"] if "pe" in r else not r["valid"]
+assert r["valid"] is False and r["reason"]=="split_history_not_verified"
 r=historical_valuation(**{**base,"price_basis":"dividend_adjusted"})
 assert r["valid"] is False
 r=historical_valuation(**{**base,"split_events":[{"date":"2024-05-01","ratio":2}]})
