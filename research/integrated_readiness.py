@@ -8,7 +8,12 @@ from datetime import date
 from pathlib import Path
 from ttm_metrics import compute
 
-def audit(in_dir,tech_dir,asof,score_file=None):
+def audit(in_dir,tech_dir,asof,score_file=None,valuation_file=None):
+    valuations={}
+    if valuation_file and Path(valuation_file).exists():
+        vp=json.loads(Path(valuation_file).read_text(encoding='utf-8'))
+        if vp.get('asof')!=asof:raise ValueError('Valuation date mismatch')
+        valuations={r['ticker']:r['valuation'] for r in vp.get('rows',[]) if r.get('asof')==asof}
     scores={}
     if score_file and Path(score_file).exists():
         payload=json.loads(Path(score_file).read_text(encoding="utf-8"))
@@ -40,6 +45,9 @@ def audit(in_dir,tech_dir,asof,score_file=None):
             and bool(eps_growth.get("old_period_end"))
             and eps_growth["old_period_end"] < eps_growth["new_period_end"]
         )
+        val=valuations.get(ticker,{})
+        val_ready=(val.get("valid") is True and
+                   all(val.get(k) is not None for k in ("pe","pb","market_cap")))
         checks={
           "ttm_revenue":metrics["ttm"]["revenue"] is not None,
           "ttm_net_income":metrics["ttm"]["net_income"] is not None,
@@ -49,7 +57,7 @@ def audit(in_dir,tech_dir,asof,score_file=None):
           "historical_tech_score":ticker in scores,
           "validated_eps_growth":eps_sources_valid,
           "historical_debt_equity":False,
-          "historical_pe_pb_market_cap":False,
+          "historical_pe_pb_market_cap":val_ready,
           "historical_sector_medians":False,
           "historical_membership":False,
         }
@@ -59,6 +67,7 @@ def audit(in_dir,tech_dir,asof,score_file=None):
                           "technical_asof":tech.get("Date","")[:10] if tech else None,
                           "tech_score":scores[ticker]["tech_score"] if ticker in scores else None,
                           "eps_growth_annual_pit":eps_growth["growth"] if eps_sources_valid else None,
+                          "historical_valuation":{k:val.get(k) for k in ("pe","pb","market_cap")} if val_ready else None,
                           "combined_score":None})
     return {"companies":len(companies),"missing":missing,
             "valid_combined_scores":0,"backtest_ready":False,"rows":companies,
@@ -69,9 +78,10 @@ def main():
     p.add_argument("--technical",default="results/quality_swing/technical_pit")
     p.add_argument("--asof",required=True)
     p.add_argument("--score-file",default="results/quality_swing/exact_technical_scores.json")
+    p.add_argument("--valuation-file",default="results/quality_swing/historical_valuations.json")
     p.add_argument("--out",default="results/quality_swing/integrated_readiness.json")
     args=p.parse_args()
-    result=audit(args.in_dir,args.technical,args.asof,args.score_file)
+    result=audit(args.in_dir,args.technical,args.asof,args.score_file,args.valuation_file)
     target=Path(args.out);target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(result,indent=2),encoding="utf-8")
     print(json.dumps({k:v for k,v in result.items() if k!="rows"},indent=2))
