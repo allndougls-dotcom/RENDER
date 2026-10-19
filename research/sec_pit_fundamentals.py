@@ -21,6 +21,9 @@ TAGS = {
  "operating_cashflow": ["NetCashProvidedByUsedInOperatingActivities"],
  "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"],
  "shares": ["CommonStockSharesOutstanding"],
+ "long_term_debt_noncurrent": ["LongTermDebtNoncurrent"],
+ "long_term_debt_current": ["LongTermDebtCurrent"],
+ "short_term_borrowings": ["ShortTermBorrowings"],
 }
 def get(url,agent):
     req=urllib.request.Request(url,headers={"User-Agent":agent,"Accept":"application/json"})
@@ -56,6 +59,29 @@ def snapshot(cik,asof,agent):
     fields={name:pick(facts["facts"],tags,asof,"flow" if name in
           {"revenue","net_income","operating_cashflow","capex"} else "shares" if name=="shares" else "balance")
           for name,tags in TAGS.items()}
+    # For TTM ROE, compare equity at approximately one-year-separated dates.
+    # Preserve PIT filing cutoff independently from the earlier balance date.
+    current_equity=fields.get("equity")
+    prior_equity=None
+    if current_equity:
+        this_end=date.fromisoformat(current_equity["period_end"])
+        candidates=[]
+        for priority,tag in enumerate(TAGS["equity"]):
+            for item in facts["facts"].get("us-gaap",{}).get(tag,{}).get("units",{}).get("USD",[]):
+                try:
+                    end=date.fromisoformat(item["end"])
+                    filed=date.fromisoformat(item["filed"])
+                    value=float(item["val"])
+                except (KeyError,TypeError,ValueError):continue
+                if item.get("form") not in ("10-K","10-Q","10-K/A","10-Q/A"):continue
+                if "start" in item or filed>asof or not 330<=(this_end-end).days<=400:continue
+                if not __import__("math").isfinite(value):continue
+                candidates.append((end,filed,-priority,item.get("accn",""),value,tag))
+        if candidates:
+            end,filed,_,accn,value,tag=max(candidates,key=lambda x:(x[0],x[1],x[2]))
+            prior_equity={"value":value,"period_end":end.isoformat(),
+                          "available_on":filed.isoformat(),"accession":accn,"tag":tag}
+    fields["equity_prior"]=prior_equity
     ttm_tags={"revenue":TAGS["revenue"],"net_income":TAGS["net_income"],
               "operating_cashflow":TAGS["operating_cashflow"],"capex":TAGS["capex"]}
     ttm={name:latest_ttm(observations(facts["facts"],tags,asof)) for name,tags in ttm_tags.items()}
