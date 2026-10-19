@@ -25,7 +25,7 @@ def compute(d):
     prior=f("equity_prior")
     debt_parts=[f(x) for x in ("long_term_debt_noncurrent","long_term_debt_current","short_term_borrowings")]
     debt_dates=[(fields.get(x) or {}).get("period_end") for x in ("long_term_debt_noncurrent","long_term_debt_current","short_term_borrowings") if (fields.get(x) or {}).get("value") is not None]
-    debt_consistent=(len(debt_dates)>0 and len(set(debt_dates))==1 and
+    # At least the long-term current and noncurrent components must be reported.\n    # Do not treat an absent debt component as 0 or silently undercount borrowing.\n    long_components_present=all(x is not None for x in debt_parts[:2])\n    debt_consistent=(long_components_present and len(set(debt_dates))==1 and
                      debt_dates[0]==(fields.get("equity") or {}).get("period_end"))
     debt=sum(x for x in debt_parts if x is not None) if debt_consistent else None
     avg_equity=(equity+prior)/2 if equity is not None and prior is not None and equity>0 and prior>0 else None
