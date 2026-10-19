@@ -65,17 +65,17 @@ jobs:
       - name: Install OHLCV dependencies
         run: python -m pip install pandas numpy yfinance tqdm
       - name: Download historical bars for SEC pilot universe
-        run: python research/download_quality_prices.py --universe-csv results/quality_swing/sec_universe.csv --prices data/backtest_prices --years 10 --limit "${{ inputs.limit }}"
+        run: python research/download_quality_prices.py --universe-csv results/quality_swing/sec_universe.csv --prices data/backtest_prices --years 10 --limit "${{ inputs.limit || '50' }}"
       - name: Reconstruct dated technical gates
         run: python research/technical_pit.py --prices data/backtest_prices --out results/quality_swing/technical_pit
       - name: Test exact historical technical score
         run: python research/test_exact_technical_score.py
       - name: Compute exact production technical score at historical close
-        run: python research/exact_technical_score.py --asof "${{ inputs.asof }}"
+        run: python research/exact_technical_score.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Test cross-module historical audit
         run: python research/test_integrated_readiness.py
       - name: Integrate financial and technical coverage
-        run: python research/integrated_readiness.py --asof "${{ inputs.asof }}"
+        run: python research/integrated_readiness.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
