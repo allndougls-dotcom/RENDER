@@ -96,6 +96,10 @@ jobs:
         run: |
           python research/test_exploratory_valuation.py
           python research/exploratory_valuation.py --asof "${{ inputs.asof || '2024-06-28' }}"
+      - name: Summarize exploratory sector medians (not historical SIDI scores)
+        run: |
+          python research/test_exploratory_sector_medians.py
+          python research/exploratory_sector_medians.py
       - name: Audit historical valuation joins
         run: python research/historical_valuation_join.py --asof "${{ inputs.asof || '2024-06-28' }}"
       - name: Reconstruct dated technical gates
