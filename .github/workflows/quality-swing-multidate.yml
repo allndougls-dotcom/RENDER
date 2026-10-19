@@ -1,0 +1,65 @@
+name: QUALITY SWING multi-date exploratory pilot
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Number of current-universe tickers (exploratory)'
+        default: '20'
+        required: true
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/quality-swing-multidate.yml'
+permissions:
+  contents: read
+jobs:
+  multi-date:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      PILOT_LIMIT: ${{ inputs.limit || '20' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install research dependencies
+        run: python -m pip install pandas numpy yfinance tqdm
+      - name: Check SEC contact
+        run: |
+          test -n "$SEC_USER_AGENT" || { echo "::error::SEC_USER_AGENT secret required"; exit 1; }
+      - name: Build current-universe pilot and download price history once
+        run: |
+          python research/build_sec_universe.py --user-agent "$SEC_USER_AGENT"
+          python research/download_quality_prices.py --universe-csv results/quality_swing/sec_universe.csv --prices data/backtest_prices --years 10 --limit "$PILOT_LIMIT"
+          python research/download_valuation_prices.py --limit "$PILOT_LIMIT"
+      - name: Validate independent-date calculations
+        run: |
+          python research/test_eps_pit.py
+          python research/test_exploratory_valuation.py
+          python research/test_exploratory_quality_ranking.py
+          python research/test_quality_cohort_comparison.py
+      - name: Reconstruct three independent PIT dates
+        run: |
+          mkdir -p results/quality_swing/dated_rankings
+          for ASOF in 2023-06-30 2024-06-28 2025-06-30; do
+            echo "::group::Reconstruct $ASOF"
+            python research/sec_pit_batch.py --universe-csv results/quality_swing/sec_universe.csv --asof "$ASOF" --limit "$PILOT_LIMIT"
+            python research/exact_technical_score.py --asof "$ASOF"
+            python research/exploratory_valuation.py --asof "$ASOF"
+            python research/exploratory_quality_ranking.py --asof "$ASOF"
+            cp results/quality_swing/exploratory_ranking.json "results/quality_swing/dated_rankings/$ASOF.json"
+            echo "::endgroup::"
+          done
+      - name: Compare cohorts across independent dates with 10% stop
+        run: python research/quality_cohort_comparison.py --ranking-dir results/quality_swing/dated_rankings --stop 0.10
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-multidate-pilot
+          path: |
+            results/quality_swing/dated_rankings/
+            results/quality_swing/cohort_comparison.json
+          retention-days: 30
+          if-no-files-found: warn
