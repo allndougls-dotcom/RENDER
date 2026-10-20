@@ -38,7 +38,7 @@ def extract(execute,start,end,limit=5000):
         # No broad selects: only score-bearing tables or known JSON payload columns,
         # and table must provide a date/ticker or discover them in allowlisted JSON paths.
         if not score and not payload:continue
-        j=lambda path: "json_extract("+ident(payload)+",'"+path+"')" if payload else "NULL"
+        j=lambda path: "(CASE WHEN json_valid("+ident(payload)+") THEN json_extract("+ident(payload)+",'"+path+"') END)" if payload else "NULL"
         json_score="COALESCE("+",".join(j(p) for p in JSON_PATHS if p.endswith("combined_score"))+")" if payload else "NULL"
         expr_score=ident(score) if score else json_score
         expr_ticker=ident(ticker) if ticker else ("COALESCE("+j("$.ticker")+","+j("$.symbol")+")" if payload else "NULL")
