@@ -1,0 +1,30 @@
+name: SIDI Original Ingest +10 +15 Outcomes
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install "yfinance>=0.2.65" "pandas>=2.0"
+      - name: Recover original point-in-time ingest signals
+        run: python research/recover_original_ingesta_history.py
+      - name: Validate outcome study
+        run: python -m py_compile research/original_ingesta_swing_outcomes.py
+      - name: Check historical +10 and +15 outcomes
+        run: python research/original_ingesta_swing_outcomes.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sidi-original-ingesta-tp10-tp15
+          path: results/quality_swing/original_ingesta_outcomes/
+          retention-days: 14
+          if-no-files-found: warn
