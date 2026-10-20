@@ -21,12 +21,12 @@ def main():
             paths=git("ls-tree","-r","--name-only",sha,"--","data/master").decode().splitlines()
         except subprocess.CalledProcessError:continue
         for path in paths:
-            if not re.fullmatch(r"data/master/sp500_full_export_[0-9]{8}\\.csv",path):
+            if not re.fullmatch(r"data/master/sp500_full_export_[0-9]{8}[.]csv",path):
                 continue
             blob=git("rev-parse",sha+":"+path).decode().strip()
             if blob in seen:continue
             seen.add(blob)
-            dt=re.search(r"([0-9]{8})\\.csv$",path).group(1)
+            dt=re.search(r"([0-9]{8})[.]csv$",path).group(1)
             date=dt[:4]+"-"+dt[4:6]+"-"+dt[6:8]
             if date<"2026-08-01":continue
             try:raw=git("show",sha+":"+path).decode("utf-8-sig")
