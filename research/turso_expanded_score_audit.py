@@ -23,7 +23,7 @@ def score_value(value):
         return n if math.isfinite(n) and 8<n<=10 else None
     except (TypeError,ValueError):return None
 def extract(execute,start,end,limit=5000):
-    if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}",start+"" ) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}",end+""):raise ValueError("date")
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}",start+"" ) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}",end+""):raise ValueError("date")
     tables=execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
     results=[];audit=[]
     for entry in tables:
