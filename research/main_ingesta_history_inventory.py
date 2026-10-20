@@ -1,18 +1,28 @@
 """Read-only GitHub Actions history inventory (August 2026 onward)."""
-import csv,json,os,urllib.request
+import csv,json,os,urllib.request,urllib.error,time,random
 from datetime import datetime,timezone
 from pathlib import Path
 ROOT="https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]
 TOKEN=os.environ["GH_TOKEN"]
 def get(path):
     req=urllib.request.Request(ROOT+path,headers={"Authorization":"Bearer "+TOKEN,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"})
-    with urllib.request.urlopen(req,timeout=45) as res:return json.load(res)
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(req,timeout=25) as res:return json.load(res)
+        except urllib.error.HTTPError as err:
+            if err.code not in (429,500,502,503,504) or attempt==5:raise
+            wait=min(30,2**attempt)+random.random()
+            print("GitHub temporary HTTP",err.code,"retrying",path,"attempt",attempt+1,flush=True)
+            time.sleep(wait)
+        except (TimeoutError,urllib.error.URLError):
+            if attempt==5:raise
+            time.sleep(min(30,2**attempt)+random.random())
 def main():
     base=Path("results/quality_swing/main_ingesta_history")
     base.mkdir(parents=True,exist_ok=True)
     workflows=get("/actions/workflows?per_page=100").get("workflows",[])
     runs=[]
-    for page in range(1,11):
+    for page in range(1,21):
         page_runs=get("/actions/runs?per_page=100&page="+str(page)).get("workflow_runs",[])
         if not page_runs:break
         for r in page_runs:
@@ -23,7 +33,9 @@ def main():
     for r in runs:
         run_id=r["id"]
         try:artifacts=get("/actions/runs/"+str(run_id)+"/artifacts?per_page=100").get("artifacts",[])
-        except Exception:artifacts=[]
+        except Exception as err:
+            print("Could not inspect artifacts for run",run_id,type(err).__name__,flush=True)
+            artifacts=[]
         workflow_name=r.get("name","")
         match=("ingest" in workflow_name.lower() or "ingesta" in workflow_name.lower())
         if not match and not artifacts:continue
