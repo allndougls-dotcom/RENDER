@@ -1,0 +1,27 @@
+name: SIDI Recover Original MAIN INGESTA CSV History
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate recovery script
+        run: python -m py_compile research/recover_original_ingesta_history.py
+      - name: Recover original CSV scores from git history
+        run: python research/recover_original_ingesta_history.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sidi-original-main-ingesta-csv-history
+          path: results/quality_swing/original_ingesta_history/
+          retention-days: 14
+          if-no-files-found: warn
