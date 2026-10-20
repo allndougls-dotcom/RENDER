@@ -1,0 +1,40 @@
+name: SIDI Turso expanded STOCK-RADAR score audit
+on:
+  workflow_dispatch:
+    inputs:
+      from_date:
+        default: '2026-08-01'
+        required: true
+      to_date:
+        default: '2026-10-20'
+        required: true
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate read-only audit
+        run: |
+          python -m py_compile research/turso_expanded_score_audit.py
+          python research/test_turso_expanded_score_audit.py
+      - name: Export expanded historical score audit
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          FROM_DATE: ${{ inputs.from_date }}
+          TO_DATE: ${{ inputs.to_date }}
+        run: |
+          python research/turso_expanded_score_audit.py --from-date "$FROM_DATE" --to-date "$TO_DATE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: turso-expanded-score-audit
+          path: results/quality_swing/turso_expanded_audit/
+          retention-days: 7
+          if-no-files-found: warn
