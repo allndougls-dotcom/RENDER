@@ -1,0 +1,25 @@
+name: SIDI MAIN INGESTA history inventory
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile research/main_ingesta_history_inventory.py
+      - name: Index historical runs and artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python research/main_ingesta_history_inventory.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sidi-main-ingesta-history-inventory
+          path: results/quality_swing/main_ingesta_history/
+          retention-days: 7
