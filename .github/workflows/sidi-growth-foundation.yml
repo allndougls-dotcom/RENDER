@@ -1,0 +1,27 @@
+name: SIDI Growth Foundation - Time to +15
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install "yfinance>=0.2.65" "pandas>=2.0"
+      - run: python -m py_compile research/sidi_growth_foundation.py
+      - name: Analyze historic original SIDI scores and +15 percent target
+        run: python research/sidi_growth_foundation.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sidi-growth-foundation
+          path: results/quality_swing/sidi_growth_foundation/
+          retention-days: 14
+          if-no-files-found: warn
