@@ -1,0 +1,31 @@
+name: SIDI Historical PIT Integration V1
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pit-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m py_compile research/sidi_pit_sec_calibration.py research/sidi_pit_integration_gate.py
+      - name: Historical SEC panel 2023 2024 2025
+        run: python research/sidi_pit_sec_calibration.py
+      - name: Integrate PIT ratios and report missing score components
+        run: python research/sidi_pit_integration_gate.py --in-dir results/sidi_growth/sec_calibration
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sidi-historical-pit-integration-v1
+          path: |
+            results/sidi_growth/sec_calibration/
+            results/sidi_growth/pit_integration_v1/
+          retention-days: 30
+          if-no-files-found: warn
