@@ -1,31 +1,25 @@
 {
-  "date": "2026-11-19 22:24",
+  "date": "2026-11-20 21:56",
   "sidi_strategy_version": "SIDI_INTRADAY_V2",
-  "spy_price": 730.2,
-  "spy_ma20": 753.72,
-  "spy_ma50": 762.28,
-  "spy_ma200": 730.02,
-  "spy_rsi": 34.7,
-  "spy_return_20d": -5.5479,
+  "spy_price": 715.87,
+  "spy_ma20": 751.32,
+  "spy_ma50": 761.48,
+  "spy_ma200": 730.2,
+  "spy_rsi": 34.5,
+  "spy_return_20d": -6.2948,
   "sidi_spy20_gate": true,
-  "spy_vs200": 0.02,
-  "spy_dd52": -6.28,
-  "spy_ma200_slope": 0.939,
-  "spy_vol_ratio": 1.49,
-  "vix": 24.56,
-  "market_regime": "ALCISTA",
-  "regime_color": "#86efac",
-  "regime_icon": "🟩",
-  "regime_desc": "ALCISTA. Régimen descriptivo; SIDI_INTRADAY_V2 usa SPY20 como puerta operativa.",
-  "regime_score": 8,
+  "spy_vs200": -1.96,
+  "spy_dd52": -8.11,
+  "spy_ma200_slope": 0.909,
+  "spy_vol_ratio": 1.48,
+  "vix": 28.44,
+  "market_regime": "LATERAL",
+  "regime_color": "#fbbf24",
+  "regime_icon": "🟡",
+  "regime_desc": "LATERAL. Régimen descriptivo; SIDI_INTRADAY_V2 usa SPY20 como puerta operativa.",
+  "regime_score": 5,
   "filter_rec": "SIDI_INTRADAY_V2: Fund≥6.5 · DD60≥12% · RSI<40 · MACD↑ · Vol↓ · SPY20≤+1% · Abnormal20≤-10%",
   "history": [
-    {
-      "date": "2025-11-20",
-      "close": 645.57,
-      "ma200": 605.48,
-      "rsi": 28.3
-    },
     {
       "date": "2025-11-21",
       "close": 652.0,
@@ -1519,6 +1513,12 @@
       "close": 730.2,
       "ma200": 730.02,
       "rsi": 34.7
+    },
+    {
+      "date": "2026-11-19",
+      "close": 715.87,
+      "ma200": 730.2,
+      "rsi": 34.5
     }
   ]
 }
