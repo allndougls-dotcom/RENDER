@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-26 23:14",
+  "date": "2026-11-27 22:54",
   "sidi_strategy_version": "SIDI_INTRADAY_V2",
   "spy_price": 716.7,
   "spy_ma20": 740.33,
@@ -12,7 +12,7 @@
   "spy_dd52": -8.01,
   "spy_ma200_slope": 0.765,
   "spy_vol_ratio": 1.58,
-  "vix": 28.29,
+  "vix": 26.8,
   "market_regime": "LATERAL",
   "regime_color": "#fbbf24",
   "regime_icon": "🟡",
